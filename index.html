@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Trailer - Vendas</title>
     
-    <!-- 1. CSS (Visual) - Tailwind CSS -->
+    <!-- 1. Visual (Tailwind CSS) -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. Ferramentas do React -->
+    <!-- 2. Motor do App (React + Babel) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
     <script type="importmap">
@@ -22,17 +22,20 @@
     </script>
     
     <style>
-        /* Pequenas animações para o modal*/
+        /* Animações */
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .animate-fade-in { animation: fadeIn 0.2s ease-out; }
-        .animate-scale-in { animation: scaleIn 0.2s ease-out; }
+        .animate-slide-up { animation: slideUp 0.3s ease-out; }
+        
+        /* Ajuste para botões da calculadora não selecionarem texto */
+        .no-select { user-select: none; -webkit-user-select: none; }
     </style>
 </head>
 <body class="bg-gray-100 font-sans text-gray-800">
     <div id="root"></div>
 
-    <!-- 3. JAVASCRIPT E LÓGICA (React) -->
+    <!-- 3. CÓDIGO DO APP -->
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect } from 'react';
         import { createRoot } from 'react-dom/client';
@@ -40,26 +43,30 @@
             ShoppingCart, Plus, Minus, Trash2, FileText, 
             Settings, DollarSign, XCircle, Coffee, 
             Utensils, TrendingUp, RefreshCcw, AlertCircle,
-            CreditCard, Banknote, QrCode, Wallet, X
+            CreditCard, Banknote, QrCode, Wallet, X,
+            Calculator, Delete
         } from 'lucide-react';
 
         function App() {
-            // --- ESTADOS (Memória do App) ---
-            const [activeTab, setActiveTab] = useState('pos'); // pos, report, menu
+            // --- ESTADOS ---
+            const [activeTab, setActiveTab] = useState('pos');
             const [cart, setCart] = useState([]);
-            const [showPaymentModal, setShowPaymentModal] = useState(false); // NOVO: Controla a janela de pagamento
+            const [showPaymentModal, setShowPaymentModal] = useState(false);
             
-            // NOVO: Caixa Inicial (Fundo de Troco)
+            // Calculadora
+            const [showCalc, setShowCalc] = useState(false);
+            const [calcDisplay, setCalcDisplay] = useState('0');
+            const [newCalcNumber, setNewCalcNumber] = useState(true); // Para saber se limpa a tela ao digitar
+
+            // Caixa
             const [openingCash, setOpeningCash] = useState(() => {
                 const saved = localStorage.getItem('trailer_opening_cash');
                 return saved ? parseFloat(saved) : 0.00;
             });
-
-            // Estado temporário para editar o valor do caixa inicial
             const [editingOpeningCash, setEditingOpeningCash] = useState(false);
             const [tempOpeningCash, setTempOpeningCash] = useState('');
 
-            // Cardápio Inicial
+            // Menu e Histórico
             const initialMenu = [
                 { id: 1, name: 'X-Tudo', price: 13.00, category: 'Lanches' },
                 { id: 2, name: 'X-Salada', price: 18.00, category: 'Lanches' },
@@ -81,180 +88,190 @@
 
             const [newItem, setNewItem] = useState({ name: '', price: '', category: 'Lanches' });
 
-            // --- EFEITOS (Salvar Automático) ---
+            // --- EFEITOS ---
             useEffect(() => { localStorage.setItem('trailer_menu', JSON.stringify(menu)); }, [menu]);
             useEffect(() => { localStorage.setItem('trailer_sales', JSON.stringify(salesHistory)); }, [salesHistory]);
             useEffect(() => { localStorage.setItem('trailer_opening_cash', openingCash.toString()); }, [openingCash]);
 
-            // --- LÓGICA DO CARRINHO ---
-            const addToCart = (item) => {
-                setCart(prev => {
-                    const existing = prev.find(i => i.id === item.id);
-                    if (existing) {
-                        return prev.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i);
+            // --- LÓGICA DA CALCULADORA ---
+            const handleCalcInput = (val) => {
+                if (val === 'C') {
+                    setCalcDisplay('0');
+                    setNewCalcNumber(true);
+                    return;
+                }
+                if (val === '=') {
+                    try {
+                        // Troca X por * para cálculo
+                        const expression = calcDisplay.replace(/x/g, '*').replace(/÷/g, '/');
+                        // Função segura para calcular string
+                        const result = new Function('return ' + expression)();
+                        setCalcDisplay(String(parseFloat(result.toFixed(2)))); // Limita decimais
+                        setNewCalcNumber(true);
+                    } catch (e) {
+                        setCalcDisplay('Erro');
+                        setNewCalcNumber(true);
                     }
-                    return [...prev, { ...item, qty: 1 }];
-                });
-            };
+                    return;
+                }
+                
+                // Operadores
+                if (['+', '-', 'x', '÷'].includes(val)) {
+                    setCalcDisplay(calcDisplay + ' ' + val + ' ');
+                    setNewCalcNumber(false);
+                    return;
+                }
 
-            const removeFromCart = (itemId) => {
-                setCart(prev => prev.filter(i => i.id !== itemId));
-            };
-
-            const updateQty = (itemId, delta) => {
-                setCart(prev => {
-                    return prev.map(i => {
-                        if (i.id === itemId) {
-                            const newQty = i.qty + delta;
-                            if (newQty < 1) return i;
-                            return { ...i, qty: newQty };
-                        }
-                        return i;
-                    });
-                });
-            };
-
-            const cancelOrder = () => {
-                if (confirm('Deseja cancelar o pedido atual e limpar a tela?')) {
-                    setCart([]);
+                // Números
+                if (newCalcNumber && calcDisplay !== 'Erro') {
+                    setCalcDisplay(val);
+                    setNewCalcNumber(false);
+                } else {
+                    setCalcDisplay(calcDisplay === '0' ? val : calcDisplay + val);
                 }
             };
 
-            const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
-
-            // --- LÓGICA FINANCEIRA ---
-
-            // 1. Abrir Modal de Pagamento
-            const openPaymentModal = () => {
-                if (cart.length === 0) return;
-                setShowPaymentModal(true);
+            // --- LÓGICA DO SISTEMA ---
+            const addToCart = (item) => {
+                setCart(prev => {
+                    const existing = prev.find(i => i.id === item.id);
+                    if (existing) return prev.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i);
+                    return [...prev, { ...item, qty: 1 }];
+                });
             };
-
-            // 2. Finalizar Venda com Método Específico
+            const removeFromCart = (id) => setCart(prev => prev.filter(i => i.id !== id));
+            const updateQty = (id, delta) => setCart(prev => prev.map(i => i.id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i));
+            const cancelOrder = () => confirm('Limpar pedido?') && setCart([]);
+            const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+            const openPaymentModal = () => cart.length > 0 && setShowPaymentModal(true);
+            
             const finalizeSale = (method) => {
-                const sale = {
-                    id: Date.now(),
-                    date: new Date().toISOString(),
-                    items: cart,
-                    total: cartTotal,
-                    method: method // 'money', 'pix', 'card'
-                };
-
+                const sale = { id: Date.now(), date: new Date().toISOString(), items: cart, total: cartTotal, method };
                 setSalesHistory([...salesHistory, sale]);
                 setCart([]);
                 setShowPaymentModal(false);
             };
 
-            // 3. Cálculos do Relatório
             const salesByMethod = salesHistory.reduce((acc, sale) => {
                 acc[sale.method] = (acc[sale.method] || 0) + sale.total;
                 return acc;
             }, { money: 0, pix: 0, card: 0 });
-
             const totalRevenue = salesHistory.reduce((acc, sale) => acc + sale.total, 0);
-            
-            // Dinheiro na Gaveta = Caixa Inicial + Vendas em Dinheiro (Pix e Cartão vão pro banco)
             const finalCashInDrawer = openingCash + salesByMethod.money;
 
-            // 4. Salvar Caixa Inicial Editado
-            const handleSaveOpeningCash = () => {
-                const val = parseFloat(tempOpeningCash);
-                if (!isNaN(val)) {
-                    setOpeningCash(val);
-                }
-                setEditingOpeningCash(false);
-            };
-
             const resetSales = () => {
-                if (confirm('ATENÇÃO: Isso apagará todas as vendas e zerará o caixa inicial para começar um novo dia. Confirmar?')) {
+                if (confirm('Zerar dia e apagar vendas?')) {
                     setSalesHistory([]);
                     setOpeningCash(0);
                 }
             };
-
-            // --- LÓGICA DO MENU ---
+            
             const addMenuItem = () => {
                 if (!newItem.name || !newItem.price) return;
-                const item = {
-                    id: Date.now(),
-                    name: newItem.name,
-                    price: parseFloat(newItem.price),
-                    category: newItem.category
-                };
-                setMenu([...menu, item]);
+                setMenu([...menu, { id: Date.now(), name: newItem.name, price: parseFloat(newItem.price), category: newItem.category }]);
                 setNewItem({ name: '', price: '', category: 'Lanches' });
             };
+            const deleteMenuItem = (id) => confirm('Excluir item?') && setMenu(menu.filter(m => m.id !== id));
 
-            const deleteMenuItem = (id) => {
-                if (confirm('Tem certeza que deseja excluir este item do cardápio?')) {
-                    setMenu(menu.filter(m => m.id !== id));
-                }
-            };
+            // --- UI CALCULADORA (BOTOES) ---
+            const CalcButton = ({ label, color = "bg-gray-100 text-gray-800", wide = false }) => (
+                <button 
+                    onClick={() => handleCalcInput(label)}
+                    className={`${color} ${wide ? 'col-span-2' : ''} p-4 rounded-xl text-xl font-bold active:scale-95 transition-transform shadow-sm border-b-2 border-gray-300 active:border-b-0`}
+                >
+                    {label}
+                </button>
+            );
 
-            // --- VISUAL (O que aparece na tela) ---
+            // --- RENDER ---
             return (
-                <div className="flex flex-col h-screen relative">
+                <div className="flex flex-col h-screen relative bg-gray-100">
                     
-                    {/* MODAL DE PAGAMENTO (Janela que abre por cima) */}
-                    {showPaymentModal && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 animate-fade-in">
-                            <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-scale-in">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h3 className="text-xl font-bold text-gray-800">Como o cliente pagou?</h3>
-                                    <button onClick={() => setShowPaymentModal(false)} className="p-1 hover:bg-gray-100 rounded-full">
-                                        <X size={24} className="text-gray-400" />
-                                    </button>
+                    {/* CALCULADORA MODAL */}
+                    {showCalc && (
+                        <div className="fixed inset-0 bg-black bg-opacity-60 z-[60] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
+                            <div className="bg-gray-900 p-4 rounded-3xl shadow-2xl w-full max-w-xs animate-slide-up border border-gray-700">
+                                <div className="flex justify-between items-center mb-4">
+                                    <span className="text-gray-400 font-bold flex items-center gap-2"><Calculator size={18}/> Calculadora</span>
+                                    <button onClick={() => setShowCalc(false)} className="bg-gray-800 p-2 rounded-full text-white hover:bg-gray-700"><X size={20}/></button>
                                 </div>
                                 
-                                <div className="text-center mb-6 bg-gray-50 p-4 rounded-xl border border-gray-100">
-                                    <span className="text-gray-500 text-sm uppercase font-bold tracking-wider">Valor a Receber</span>
-                                    <div className="text-4xl font-bold text-gray-800 mt-1">R$ {cartTotal.toFixed(2)}</div>
+                                {/* Visor */}
+                                <div className="bg-gray-100 rounded-xl p-4 mb-4 text-right h-20 flex items-center justify-end overflow-hidden shadow-inner border-4 border-gray-800">
+                                    <span className="text-3xl font-mono font-bold text-gray-900 truncate">{calcDisplay}</span>
                                 </div>
 
-                                <div className="space-y-3">
-                                    <button onClick={() => finalizeSale('money')} className="w-full bg-green-50 hover:bg-green-100 text-green-800 border border-green-200 p-4 rounded-xl flex items-center gap-4 font-bold transition-colors">
-                                        <div className="bg-green-500 text-white p-2 rounded-lg shadow-sm"><Banknote size={24}/></div>
-                                        <div className="text-left">
-                                            <span className="block text-sm text-green-600">Receber em</span>
-                                            <span className="text-lg">Dinheiro</span>
-                                        </div>
-                                    </button>
+                                {/* Teclado */}
+                                <div className="grid grid-cols-4 gap-3 no-select">
+                                    <CalcButton label="C" color="bg-red-500 text-white border-red-700" />
+                                    <CalcButton label="÷" color="bg-orange-500 text-white border-orange-700" />
+                                    <CalcButton label="x" color="bg-orange-500 text-white border-orange-700" />
+                                    <CalcButton label="-" color="bg-orange-500 text-white border-orange-700" />
                                     
-                                    <button onClick={() => finalizeSale('pix')} className="w-full bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 p-4 rounded-xl flex items-center gap-4 font-bold transition-colors">
-                                        <div className="bg-teal-500 text-white p-2 rounded-lg shadow-sm"><QrCode size={24}/></div>
-                                        <div className="text-left">
-                                            <span className="block text-sm text-teal-600">Receber no</span>
-                                            <span className="text-lg">PIX</span>
-                                        </div>
-                                    </button>
+                                    <CalcButton label="7" />
+                                    <CalcButton label="8" />
+                                    <CalcButton label="9" />
+                                    <CalcButton label="+" color="bg-orange-500 text-white border-orange-700" />
                                     
-                                    <button onClick={() => finalizeSale('card')} className="w-full bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 p-4 rounded-xl flex items-center gap-4 font-bold transition-colors">
-                                        <div className="bg-blue-500 text-white p-2 rounded-lg shadow-sm"><CreditCard size={24}/></div>
-                                        <div className="text-left">
-                                            <span className="block text-sm text-blue-600">Receber no</span>
-                                            <span className="text-lg">Cartão</span>
-                                        </div>
-                                    </button>
+                                    <CalcButton label="4" />
+                                    <CalcButton label="5" />
+                                    <CalcButton label="6" />
+                                    <CalcButton label="=" color="bg-green-600 text-white row-span-2 h-full flex items-center justify-center border-green-800" />
+                                    
+                                    <CalcButton label="1" />
+                                    <CalcButton label="2" />
+                                    <CalcButton label="3" />
+                                    
+                                    <CalcButton label="0" wide={true} />
+                                    <CalcButton label="." />
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* CABEÇALHO */}
-                    <header className="bg-red-700 text-white p-4 shadow-md flex justify-between items-center z-10">
-                        <div>
-                            <h1 className="text-xl font-bold flex items-center gap-2">
-                                <Utensils size={24} />
-                                Trailer Vendas
-                            </h1>
+                    {/* MODAL PAGAMENTO */}
+                    {showPaymentModal && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 animate-fade-in">
+                            <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-slide-up">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="text-xl font-bold text-gray-800">Pagamento</h3>
+                                    <button onClick={() => setShowPaymentModal(false)}><X size={24} className="text-gray-400" /></button>
+                                </div>
+                                <div className="text-center mb-6 bg-gray-50 p-4 rounded-xl">
+                                    <span className="text-gray-500 text-sm font-bold uppercase">Total</span>
+                                    <div className="text-4xl font-bold text-gray-800">R$ {cartTotal.toFixed(2)}</div>
+                                </div>
+                                <div className="space-y-3">
+                                    <button onClick={() => finalizeSale('money')} className="w-full bg-green-50 hover:bg-green-100 text-green-800 border border-green-200 p-4 rounded-xl flex items-center gap-4 font-bold"><Banknote size={24}/> Dinheiro</button>
+                                    <button onClick={() => finalizeSale('pix')} className="w-full bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 p-4 rounded-xl flex items-center gap-4 font-bold"><QrCode size={24}/> PIX</button>
+                                    <button onClick={() => finalizeSale('card')} className="w-full bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 p-4 rounded-xl flex items-center gap-4 font-bold"><CreditCard size={24}/> Cartão</button>
+                                </div>
+                            </div>
                         </div>
-                        <div className="text-right">
-                            <span className="block text-xs opacity-80">Total Vendido</span>
-                            <span className="font-bold text-lg">R$ {totalRevenue.toFixed(2)}</span>
+                    )}
+
+                    {/* HEADER */}
+                    <header className="bg-red-700 text-white p-3 shadow-md flex justify-between items-center z-10">
+                        <div className="flex items-center gap-3">
+                            <button 
+                                onClick={() => setShowCalc(true)} 
+                                className="bg-white/10 p-2 rounded-lg hover:bg-white/20 active:bg-white/30 transition-colors border border-white/20"
+                                title="Abrir Calculadora"
+                            >
+                                <Calculator size={24} className="text-white" />
+                            </button>
+                            <div>
+                                <h1 className="text-lg font-bold leading-tight">Trailer Vendas</h1>
+                                <span className="text-xs text-red-100 opacity-80 block">Desenvolvido por Steven Oliveira</span>
+                            </div>
+                        </div>
+                        <div className="text-right bg-black/20 px-3 py-1 rounded-lg">
+                            <span className="block text-[10px] opacity-80 uppercase tracking-wider">Vendido Hoje</span>
+                            <span className="font-bold text-base">R$ {totalRevenue.toFixed(2)}</span>
                         </div>
                     </header>
 
-                    {/* CONTEÚDO PRINCIPAL */}
+                    {/* MAIN CONTENT */}
                     <main className="flex-1 overflow-y-auto pb-24 bg-gray-100">
                         
                         {/* 1. TELA DE VENDAS */}
@@ -264,199 +281,105 @@
                                     <div className="bg-white p-4 rounded-xl shadow-lg border-l-4 border-yellow-400 mb-4 animate-fade-in">
                                         <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-100">
                                             <h2 className="font-bold text-lg text-gray-800 flex items-center gap-2">
-                                                <ShoppingCart size={20} className="text-yellow-500"/> 
-                                                Pedido Atual
+                                                <ShoppingCart size={20} className="text-yellow-500"/> Pedido
                                             </h2>
-                                            <span className="bg-gray-900 text-white px-3 py-1 rounded-full text-lg font-bold">
-                                                R$ {cartTotal.toFixed(2)}
-                                            </span>
+                                            <span className="bg-gray-900 text-white px-3 py-1 rounded-full text-lg font-bold">R$ {cartTotal.toFixed(2)}</span>
                                         </div>
-                                        
                                         <div className="space-y-3 mb-4">
                                             {cart.map(item => (
                                                 <div key={item.id} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-200">
                                                     <div className="flex-1">
                                                         <span className="font-bold text-gray-800 block">{item.name}</span>
-                                                        <div className="text-xs text-gray-500">R$ {item.price.toFixed(2)} un</div>
+                                                        <div className="text-xs text-gray-500">R$ {item.price.toFixed(2)}</div>
                                                     </div>
                                                     <div className="flex items-center gap-3 bg-white rounded-lg border border-gray-300 p-1">
-                                                        <button onClick={() => updateQty(item.id, -1)} className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded hover:bg-gray-200 text-gray-700 font-bold"><Minus size={16}/></button>
+                                                        <button onClick={() => updateQty(item.id, -1)} className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded font-bold"><Minus size={16}/></button>
                                                         <span className="font-bold w-6 text-center text-lg">{item.qty}</span>
-                                                        <button onClick={() => updateQty(item.id, 1)} className="w-8 h-8 flex items-center justify-center bg-green-100 rounded hover:bg-green-200 text-green-700 font-bold"><Plus size={16}/></button>
+                                                        <button onClick={() => updateQty(item.id, 1)} className="w-8 h-8 flex items-center justify-center bg-green-100 rounded text-green-700 font-bold"><Plus size={16}/></button>
                                                     </div>
-                                                    <button onClick={() => removeFromCart(item.id)} className="ml-3 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full"><Trash2 size={20}/></button>
+                                                    <button onClick={() => removeFromCart(item.id)} className="ml-3 p-2 text-red-400 rounded-full"><Trash2 size={20}/></button>
                                                 </div>
                                             ))}
                                         </div>
-
                                         <div className="grid grid-cols-3 gap-2 mt-4">
-                                            <button onClick={cancelOrder} className="col-span-1 bg-red-100 hover:bg-red-200 text-red-700 py-3 rounded-lg font-bold text-sm flex flex-col items-center justify-center gap-1 border border-red-200 transition-colors">
-                                                <XCircle size={20} /> Cancelar
-                                            </button>
-                                            
-                                            {/* Botão que abre o Modal de Pagamento */}
-                                            <button onClick={openPaymentModal} className="col-span-2 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold text-lg shadow-md flex justify-center items-center gap-2 transition-colors">
-                                                <DollarSign size={20} /> Receber
-                                            </button>
+                                            <button onClick={cancelOrder} className="col-span-1 bg-red-100 text-red-700 py-3 rounded-lg font-bold text-sm flex flex-col items-center justify-center gap-1 border border-red-200"><XCircle size={20} /> Cancelar</button>
+                                            <button onClick={openPaymentModal} className="col-span-2 bg-green-600 text-white py-3 rounded-lg font-bold text-lg shadow-md flex justify-center items-center gap-2"><DollarSign size={20} /> Receber</button>
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl text-center text-blue-800 mb-4">
-                                        <p className="flex items-center justify-center gap-2 font-medium">
-                                            <AlertCircle size={18} /> Inicie um pedido abaixo
-                                        </p>
+                                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl text-center text-blue-800 mb-4 font-medium flex justify-center items-center gap-2">
+                                        <AlertCircle size={18} /> Inicie um pedido abaixo
                                     </div>
                                 )}
 
                                 <div className="grid grid-cols-2 gap-3">
                                     {menu.map(item => (
-                                        <button
-                                            key={item.id}
-                                            onClick={() => addToCart(item)}
-                                            className="bg-white p-3 rounded-xl shadow-sm border-b-4 border-gray-200 active:border-b-0 active:translate-y-1 transition-all flex flex-col justify-between items-start h-24 hover:bg-orange-50 relative overflow-hidden group"
-                                        >
+                                        <button key={item.id} onClick={() => addToCart(item)} className="bg-white p-3 rounded-xl shadow-sm border-b-4 border-gray-200 active:border-b-0 active:translate-y-1 transition-all flex flex-col justify-between items-start h-24 hover:bg-orange-50">
                                             <span className="font-bold text-gray-800 leading-tight text-left text-lg">{item.name}</span>
-                                            <span className="text-green-800 font-bold bg-green-100 px-2 py-0.5 rounded text-sm w-full text-center">
-                                                R$ {item.price.toFixed(2)}
-                                            </span>
+                                            <span className="text-green-800 font-bold bg-green-100 px-2 py-0.5 rounded text-sm w-full text-center">R$ {item.price.toFixed(2)}</span>
                                         </button>
                                     ))}
                                 </div>
                             </div>
                         )}
 
-                        {/* 2. TELA DE FECHAMENTO DE CAIXA */}
+                        {/* 2. TELA DE CAIXA */}
                         {activeTab === 'report' && (
                             <div className="p-4 space-y-4">
-                                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                                    <TrendingUp /> Fechamento de Caixa
-                                </h2>
+                                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><TrendingUp /> Fechamento</h2>
                                 
-                                {/* 2.1 Configuração do Caixa Inicial */}
-                                <div className="bg-white p-4 rounded-xl shadow border-l-4 border-gray-400">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-gray-600 font-medium text-sm">Caixa Inicial (Troco)</span>
-                                        
-                                        {!editingOpeningCash ? (
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xl font-bold text-gray-800">R$ {openingCash.toFixed(2)}</span>
-                                                <button onClick={() => { setTempOpeningCash(openingCash); setEditingOpeningCash(true); }} className="text-blue-600 text-xs font-bold bg-blue-50 px-2 py-1 rounded hover:bg-blue-100">
-                                                    EDITAR
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center gap-2">
-                                                <input 
-                                                    type="number" 
-                                                    value={tempOpeningCash} 
-                                                    onChange={e => setTempOpeningCash(e.target.value)} 
-                                                    className="border rounded p-1 w-20 text-lg" 
-                                                    autoFocus 
-                                                />
-                                                <button onClick={handleSaveOpeningCash} className="bg-green-500 text-white px-3 py-1 rounded text-sm font-bold">OK</button>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <p className="text-xs text-gray-400 mt-1">Quanto dinheiro tinha na gaveta ao abrir?</p>
+                                <div className="bg-white p-4 rounded-xl shadow border-l-4 border-gray-400 flex justify-between items-center">
+                                    <span className="text-gray-600 font-medium">Troco Inicial</span>
+                                    {!editingOpeningCash ? (
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xl font-bold">R$ {openingCash.toFixed(2)}</span>
+                                            <button onClick={() => { setTempOpeningCash(openingCash); setEditingOpeningCash(true); }} className="text-blue-600 text-xs font-bold bg-blue-50 px-2 py-1 rounded">EDITAR</button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            <input type="number" value={tempOpeningCash} onChange={e => setTempOpeningCash(e.target.value)} className="border rounded p-1 w-20 text-lg" autoFocus />
+                                            <button onClick={() => { setOpeningCash(parseFloat(tempOpeningCash) || 0); setEditingOpeningCash(false); }} className="bg-green-500 text-white px-3 py-1 rounded text-sm font-bold">OK</button>
+                                        </div>
+                                    )}
                                 </div>
 
-                                {/* 2.2 Entradas por Método (Separado) */}
-                                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wide mt-2">Entradas do Dia</h3>
                                 <div className="grid grid-cols-3 gap-2">
-                                    <div className="bg-green-50 p-3 rounded-xl border border-green-200 text-center">
-                                        <div className="text-green-600 text-xs font-bold uppercase mb-1 flex justify-center items-center gap-1"><Banknote size={12}/> Dinheiro</div>
-                                        <div className="text-green-800 font-bold text-lg">R$ {salesByMethod.money.toFixed(2)}</div>
-                                    </div>
-                                    <div className="bg-teal-50 p-3 rounded-xl border border-teal-200 text-center">
-                                        <div className="text-teal-600 text-xs font-bold uppercase mb-1 flex justify-center items-center gap-1"><QrCode size={12}/> PIX</div>
-                                        <div className="text-teal-800 font-bold text-lg">R$ {salesByMethod.pix.toFixed(2)}</div>
-                                    </div>
-                                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 text-center">
-                                        <div className="text-blue-600 text-xs font-bold uppercase mb-1 flex justify-center items-center gap-1"><CreditCard size={12}/> Cartão</div>
-                                        <div className="text-blue-800 font-bold text-lg">R$ {salesByMethod.card.toFixed(2)}</div>
-                                    </div>
+                                    <div className="bg-green-50 p-3 rounded-xl border border-green-200 text-center"><div className="text-green-600 text-xs font-bold uppercase mb-1">Dinheiro</div><div className="text-green-800 font-bold text-lg">R$ {salesByMethod.money.toFixed(2)}</div></div>
+                                    <div className="bg-teal-50 p-3 rounded-xl border border-teal-200 text-center"><div className="text-teal-600 text-xs font-bold uppercase mb-1">PIX</div><div className="text-teal-800 font-bold text-lg">R$ {salesByMethod.pix.toFixed(2)}</div></div>
+                                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 text-center"><div className="text-blue-600 text-xs font-bold uppercase mb-1">Cartão</div><div className="text-blue-800 font-bold text-lg">R$ {salesByMethod.card.toFixed(2)}</div></div>
                                 </div>
 
-                                {/* 2.3 Resumo Final (A Gaveta) */}
                                 <div className="bg-gray-800 text-white p-5 rounded-xl shadow-lg mt-2 relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 p-4 opacity-10">
-                                        <Wallet size={100} />
-                                    </div>
-                                    <h3 className="text-gray-400 text-sm uppercase font-bold mb-4 border-b border-gray-600 pb-2 relative z-10">Resumo da Gaveta</h3>
-                                    
-                                    <div className="flex justify-between mb-2 text-gray-300 text-sm relative z-10">
-                                        <span>+ Fundo de Troco</span>
-                                        <span>R$ {openingCash.toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex justify-between mb-4 text-green-400 text-sm font-bold relative z-10">
-                                        <span>+ Vendas em Dinheiro</span>
-                                        <span>R$ {salesByMethod.money.toFixed(2)}</span>
-                                    </div>
-                                    
-                                    <div className="flex justify-between items-center pt-4 border-t border-gray-600 relative z-10">
-                                        <span className="font-bold text-lg">Total Físico (Gaveta)</span>
-                                        <span className="font-bold text-3xl text-green-400">R$ {finalCashInDrawer.toFixed(2)}</span>
-                                    </div>
-                                    <p className="text-center text-xs text-gray-500 mt-2 relative z-10">
-                                        (Este é o valor que deve estar na sua mão agora)
-                                    </p>
+                                    <Wallet size={100} className="absolute top-0 right-0 p-4 opacity-10" />
+                                    <h3 className="text-gray-400 text-sm uppercase font-bold mb-4 border-b border-gray-600 pb-2 relative z-10">Na Gaveta</h3>
+                                    <div className="flex justify-between mb-2 text-gray-300 text-sm relative z-10"><span>+ Fundo de Troco</span><span>R$ {openingCash.toFixed(2)}</span></div>
+                                    <div className="flex justify-between mb-4 text-green-400 text-sm font-bold relative z-10"><span>+ Vendas em Dinheiro</span><span>R$ {salesByMethod.money.toFixed(2)}</span></div>
+                                    <div className="flex justify-between items-center pt-4 border-t border-gray-600 relative z-10"><span className="font-bold text-lg">Total Físico</span><span className="font-bold text-3xl text-green-400">R$ {finalCashInDrawer.toFixed(2)}</span></div>
                                 </div>
 
-                                {/* 2.4 Faturamento Geral */}
-                                <div className="bg-white p-4 rounded-xl shadow text-center border border-gray-100">
-                                    <p className="text-gray-500 text-sm">Faturamento Total (Soma de tudo)</p>
-                                    <p className="text-2xl font-bold text-blue-600">R$ {totalRevenue.toFixed(2)}</p>
-                                    <p className="text-xs text-gray-400">{salesHistory.length} vendas realizadas hoje</p>
-                                </div>
-
-                                <button onClick={resetSales} className="w-full mt-8 border border-red-200 text-red-600 bg-red-50 py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-100 transition-colors">
-                                    <RefreshCcw size={20} /> FECHAR CAIXA E ZERAR DIA
-                                </button>
+                                <button onClick={resetSales} className="w-full mt-8 border border-red-200 text-red-600 bg-red-50 py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-100 transition-colors"><RefreshCcw size={20} /> FECHAR CAIXA E ZERAR</button>
                             </div>
                         )}
 
                         {/* 3. TELA DE MENU */}
                         {activeTab === 'menu' && (
                             <div className="p-4">
-                                <h2 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2">
-                                    <Settings /> Gerenciar Produtos
-                                </h2>
-
+                                <h2 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2"><Settings /> Configurar</h2>
                                 <div className="bg-white p-4 rounded-xl shadow mb-6">
-                                    <h3 className="font-semibold mb-3 text-sm text-gray-500 uppercase">Adicionar Novo</h3>
+                                    <h3 className="font-semibold mb-3 text-sm text-gray-500 uppercase">Novo Item</h3>
                                     <div className="grid gap-3">
-                                        <input 
-                                            type="text" 
-                                            placeholder="Nome (ex: X-Bacon)" 
-                                            className="border p-3 rounded-lg w-full"
-                                            value={newItem.name}
-                                            onChange={e => setNewItem({...newItem, name: e.target.value})}
-                                        />
+                                        <input type="text" placeholder="Nome" className="border p-3 rounded-lg w-full" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
                                         <div className="flex gap-3">
-                                            <input 
-                                                type="number" 
-                                                placeholder="Preço" 
-                                                className="border p-3 rounded-lg w-full"
-                                                value={newItem.price}
-                                                onChange={e => setNewItem({...newItem, price: e.target.value})}
-                                            />
-                                            <button onClick={addMenuItem} className="bg-green-600 text-white px-6 rounded-lg font-bold hover:bg-green-700">
-                                                <Plus />
-                                            </button>
+                                            <input type="number" placeholder="Preço" className="border p-3 rounded-lg w-full" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
+                                            <button onClick={addMenuItem} className="bg-green-600 text-white px-6 rounded-lg font-bold"><Plus /></button>
                                         </div>
                                     </div>
                                 </div>
-
                                 <div className="space-y-2">
                                     {menu.map(item => (
                                         <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-lg shadow-sm border border-gray-100">
-                                            <div>
-                                                <p className="font-bold text-gray-800">{item.name}</p>
-                                                <p className="text-sm text-green-600 font-medium">R$ {item.price.toFixed(2)}</p>
-                                            </div>
-                                            <button onClick={() => deleteMenuItem(item.id)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full">
-                                                <Trash2 size={18} />
-                                            </button>
+                                            <div><p className="font-bold text-gray-800">{item.name}</p><p className="text-sm text-green-600 font-medium">R$ {item.price.toFixed(2)}</p></div>
+                                            <button onClick={() => deleteMenuItem(item.id)} className="p-2 text-red-400 hover:text-red-600"><Trash2 size={18} /></button>
                                         </div>
                                     ))}
                                 </div>
@@ -464,20 +387,11 @@
                         )}
                     </main>
 
-                    {/* BARRA DE NAVEGAÇÃO */}
+                    {/* NAV */}
                     <nav className="bg-white border-t border-gray-200 flex justify-around p-2 fixed bottom-0 w-full z-30 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
-                        <button onClick={() => setActiveTab('pos')} className={`flex flex-col items-center p-2 rounded-lg flex-1 transition-colors ${activeTab === 'pos' ? 'text-red-600 bg-red-50' : 'text-gray-400 hover:bg-gray-50'}`}>
-                            <Coffee size={24} />
-                            <span className="text-xs font-medium mt-1">Vender</span>
-                        </button>
-                        <button onClick={() => setActiveTab('report')} className={`flex flex-col items-center p-2 rounded-lg flex-1 transition-colors ${activeTab === 'report' ? 'text-blue-600 bg-blue-50' : 'text-gray-400 hover:bg-gray-50'}`}>
-                            <Wallet size={24} />
-                            <span className="text-xs font-medium mt-1">Caixa</span>
-                        </button>
-                        <button onClick={() => setActiveTab('menu')} className={`flex flex-col items-center p-2 rounded-lg flex-1 transition-colors ${activeTab === 'menu' ? 'text-gray-800 bg-gray-100' : 'text-gray-400 hover:bg-gray-50'}`}>
-                            <Settings size={24} />
-                            <span className="text-xs font-medium mt-1">Config</span>
-                        </button>
+                        <button onClick={() => setActiveTab('pos')} className={`flex flex-col items-center p-2 rounded-lg flex-1 ${activeTab === 'pos' ? 'text-red-600 bg-red-50' : 'text-gray-400'}`}><Coffee size={24} /><span className="text-xs font-medium mt-1">Vender</span></button>
+                        <button onClick={() => setActiveTab('report')} className={`flex flex-col items-center p-2 rounded-lg flex-1 ${activeTab === 'report' ? 'text-blue-600 bg-blue-50' : 'text-gray-400'}`}><Wallet size={24} /><span className="text-xs font-medium mt-1">Caixa</span></button>
+                        <button onClick={() => setActiveTab('menu')} className={`flex flex-col items-center p-2 rounded-lg flex-1 ${activeTab === 'menu' ? 'text-gray-800 bg-gray-100' : 'text-gray-400'}`}><Settings size={24} /><span className="text-xs font-medium mt-1">Config</span></button>
                     </nav>
                 </div>
             );
