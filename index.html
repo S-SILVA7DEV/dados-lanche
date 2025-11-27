@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trailer Point dos Lanches- Vendas</title>
+    
+    <!-- Carregando Tailwind CSS (Estilos) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Configuração para permitir imports de módulos (React e Lucide) -->
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "lucide-react": "https://esm.sh/lucide-react@0.263.1"
+        }
+    }
+    </script>
+</head>
+<body class="bg-gray-100">
+    <div id="root"></div>
+
+    <!-- O CÓDIGO DO APP COMEÇA AQUI -->
+    <script type="module">
+        import React, { useState, useEffect } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { 
+            ShoppingCart, Plus, Minus, Trash2, FileText, 
+            Settings, DollarSign, XCircle, Coffee, 
+            Utensils, TrendingUp, RefreshCcw, AlertCircle 
+        } from 'lucide-react';
+
+        function App() {
+            const [activeTab, setActiveTab] = useState('pos');
+            
+            const initialMenu = [
+                { id: 1, name: 'X-Tudo', price: 13.00, category: 'Lanches' },
+                { id: 2, name: 'X-Salada', price: 18.00, category: 'Lanches' },
+                { id: 3, name: 'Cachorro Quente', price: 12.00, category: 'Lanches' },
+                { id: 4, name: 'Refrigerante Lata', price: 6.00, category: 'Bebidas' },
+                { id: 5, name: 'Água', price: 2.00, category: 'Bebidas' },
+                { id: 6, name: 'Batata Frita', price: 10.00, category: 'Porções' },
+            ];
+
+            const [menu, setMenu] = useState(() => {
+                const saved = localStorage.getItem('trailer_menu');
+                return saved ? JSON.parse(saved) : initialMenu;
+            });
+
+            const [cart, setCart] = useState([]);
+            
+            const [salesHistory, setSalesHistory] = useState(() => {
+                const saved = localStorage.getItem('trailer_sales');
+                return saved ? JSON.parse(saved) : [];
+            });
+
+            const [newItem, setNewItem] = useState({ name: '', price: '', category: 'Lanches' });
+
+            useEffect(() => {
+                localStorage.setItem('trailer_menu', JSON.stringify(menu));
+            }, [menu]);
+
+            useEffect(() => {
+                localStorage.setItem('trailer_sales', JSON.stringify(salesHistory));
+            }, [salesHistory]);
+
+            const addToCart = (item) => {
+                setCart(prev => {
+                    const existing = prev.find(i => i.id === item.id);
+                    if (existing) {
+                        return prev.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i);
+                    }
+                    return [...prev, { ...item, qty: 1 }];
+                });
+            };
+
+            const removeFromCart = (itemId) => {
+                setCart(prev => prev.filter(i => i.id !== itemId));
+            };
+
+            const updateQty = (itemId, delta) => {
+                setCart(prev => {
+                    return prev.map(i => {
+                        if (i.id === itemId) {
+                            const newQty = i.qty + delta;
+                            if (newQty < 1) return i;
+                            return { ...i, qty: newQty };
+                        }
+                        return i;
+                    });
+                });
+            };
+
+            const cancelOrder = () => {
+                if (confirm('Deseja cancelar o pedido atual e limpar a tela?')) {
+                    setCart([]);
+                }
+            };
+
+            const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+
+            const finalizeSale = () => {
+                if (cart.length === 0) return;
+                
+                const sale = {
+                    id: Date.now(),
+                    date: new Date().toISOString(),
+                    items: cart,
+                    total: cartTotal
+                };
+
+                setSalesHistory([...salesHistory, sale]);
+                setCart([]);
+                alert("Venda realizada com sucesso!");
+            };
+
+            const addMenuItem = () => {
+                if (!newItem.name || !newItem.price) return;
+                const item = {
+                    id: Date.now(),
+                    name: newItem.name,
+                    price: parseFloat(newItem.price),
+                    category: newItem.category
+                };
+                setMenu([...menu, item]);
+                setNewItem({ name: '', price: '', category: 'Lanches' });
+            };
+
+            const deleteMenuItem = (id) => {
+                if (confirm('Tem certeza que deseja excluir este item do cardápio?')) {
+                    setMenu(menu.filter(m => m.id !== id));
+                }
+            };
+
+            const resetSales = () => {
+                if (confirm('Isso apagará todas as vendas de hoje. Confirmar?')) {
+                    setSalesHistory([]);
+                }
+            };
+
+            const getAggregatedSales = () => {
+                const report = {};
+                salesHistory.forEach(sale => {
+                    sale.items.forEach(item => {
+                        if (!report[item.name]) {
+                            report[item.name] = { qty: 0, total: 0 };
+                        }
+                        report[item.name].qty += item.qty;
+                        report[item.name].total += (item.price * item.qty);
+                    });
+                });
+                return report;
+            };
+
+            const totalRevenue = salesHistory.reduce((acc, sale) => acc + sale.total, 0);
+
+            return React.createElement('div', { className: "flex flex-col h-screen bg-gray-100 font-sans text-gray-800" },
+                // Header
+                React.createElement('header', { className: "bg-red-700 text-white p-4 shadow-md flex justify-between items-center z-10" },
+                    React.createElement('div', null,
+                        React.createElement('h1', { className: "text-xl font-bold flex items-center gap-2" },
+                            React.createElement(Utensils, { size: 24 }),
+                            " Trailer Point dos Lanches"
+                        )
+                    ),
+                    React.createElement('div', { className: "text-right" },
+                        React.createElement('span', { className: "block text-xs opacity-80" }, "Caixa Hoje"),
+                        React.createElement('span', { className: "font-bold text-lg" }, `R$ ${totalRevenue.toFixed(2)}`)
+                    )
+                ),
+
+                // Main Content
+                React.createElement('main', { className: "flex-1 overflow-y-auto pb-24" },
+                    
+                    // POS TAB
+                    activeTab === 'pos' && React.createElement('div', { className: "p-4 space-y-4" },
+                        // Carrinho
+                        cart.length > 0 ? React.createElement('div', { className: "bg-white p-4 rounded-xl shadow-lg border-l-4 border-yellow-400 mb-4" },
+                            React.createElement('div', { className: "flex justify-between items-center mb-3 pb-2 border-b border-gray-100" },
+                                React.createElement('h2', { className: "font-bold text-lg text-gray-800 flex items-center gap-2" },
+                                    React.createElement(ShoppingCart, { size: 20, className: "text-yellow-500" }),
+                                    " Pedido Atual"
+                                ),
+                                React.createElement('span', { className: "bg-gray-900 text-white px-3 py-1 rounded-full text-lg font-bold" },
+                                    `R$ ${cartTotal.toFixed(2)}`
+                                )
+                            ),
+                            React.createElement('div', { className: "space-y-3 mb-4" },
+                                cart.map(item => 
+                                    React.createElement('div', { key: item.id, className: "flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-200" },
+                                        React.createElement('div', { className: "flex-1" },
+                                            React.createElement('span', { className: "font-bold text-gray-800 block" }, item.name),
+                                            React.createElement('div', { className: "text-xs text-gray-500" }, `R$ ${item.price.toFixed(2)} un`)
+                                        ),
+                                        React.createElement('div', { className: "flex items-center gap-3 bg-white rounded-lg border border-gray-300 p-1" },
+                                            React.createElement('button', { onClick: () => updateQty(item.id, -1), className: "w-8 h-8 flex items-center justify-center bg-gray-100 rounded hover:bg-gray-200 text-gray-700 font-bold" }, React.createElement(Minus, { size: 16 })),
+                                            React.createElement('span', { className: "font-bold w-6 text-center text-lg" }, item.qty),
+                                            React.createElement('button', { onClick: () => updateQty(item.id, 1), className: "w-8 h-8 flex items-center justify-center bg-green-100 rounded hover:bg-green-200 text-green-700 font-bold" }, React.createElement(Plus, { size: 16 }))
+                                        ),
+                                        React.createElement('button', { onClick: () => removeFromCart(item.id), className: "ml-3 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full" }, React.createElement(Trash2, { size: 20 }))
+                                    )
+                                )
+                            ),
+                            React.createElement('div', { className: "grid grid-cols-3 gap-2 mt-4" },
+                                React.createElement('button', { onClick: cancelOrder, className: "col-span-1 bg-red-100 hover:bg-red-200 text-red-700 py-3 rounded-lg font-bold text-sm flex flex-col items-center justify-center gap-1 border border-red-200" },
+                                    React.createElement(XCircle, { size: 20 }), "Cancelar"
+                                ),
+                                React.createElement('button', { onClick: finalizeSale, className: "col-span-2 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold text-lg shadow-md flex justify-center items-center gap-2" },
+                                    React.createElement(DollarSign, { size: 20 }), "Receber"
+                                )
+                            )
+                        ) : React.createElement('div', { className: "bg-blue-50 border border-blue-200 p-4 rounded-xl text-center text-blue-800 mb-4" },
+                            React.createElement('p', { className: "flex items-center justify-center gap-2 font-medium" },
+                                React.createElement(AlertCircle, { size: 18 }), "Toque nos itens abaixo para vender"
+                            )
+                        ),
+                        
+                        // Menu Grid
+                        React.createElement('div', null,
+                            React.createElement('div', { className: "grid grid-cols-2 gap-3" },
+                                menu.map(item => 
+                                    React.createElement('button', { key: item.id, onClick: () => addToCart(item), className: "bg-white p-3 rounded-xl shadow-sm border-b-4 border-gray-200 active:border-b-0 active:translate-y-1 transition-all flex flex-col justify-between items-start h-24 hover:bg-orange-50" },
+                                        React.createElement('span', { className: "font-bold text-gray-800 leading-tight text-left text-lg" }, item.name),
+                                        React.createElement('span', { className: "text-green-800 font-bold bg-green-100 px-2 py-0.5 rounded text-sm w-full text-center" }, `R$ ${item.price.toFixed(2)}`)
+                                    )
+                                )
+                            )
+                        )
+                    ),
+
+                    // REPORT TAB
+                    activeTab === 'report' && React.createElement('div', { className: "p-4" },
+                        React.createElement('h2', { className: "text-2xl font-bold mb-6 text-gray-800 flex items-center gap-2" },
+                            React.createElement(TrendingUp), " Relatório do Dia"
+                        ),
+                        React.createElement('div', { className: "bg-white rounded-xl shadow p-6 mb-6 text-center border-t-4 border-blue-500" },
+                            React.createElement('p', { className: "text-gray-500 mb-1" }, "Faturamento Total"),
+                            React.createElement('p', { className: "text-4xl font-bold text-blue-600" }, `R$ ${totalRevenue.toFixed(2)}`),
+                            React.createElement('p', { className: "text-sm text-gray-400 mt-2" }, `${salesHistory.length} vendas realizadas`)
+                        ),
+                        React.createElement('div', { className: "bg-white rounded-xl shadow overflow-hidden" },
+                            React.createElement('table', { className: "w-full text-left" },
+                                React.createElement('thead', { className: "bg-gray-100 border-b" },
+                                    React.createElement('tr', null,
+                                        React.createElement('th', { className: "p-3 text-sm font-semibold text-gray-600" }, "Item"),
+                                        React.createElement('th', { className: "p-3 text-sm font-semibold text-gray-600 text-center" }, "Qtd"),
+                                        React.createElement('th', { className: "p-3 text-sm font-semibold text-gray-600 text-right" }, "Total")
+                                    )
+                                ),
+                                React.createElement('tbody', { className: "divide-y" },
+                                    Object.entries(getAggregatedSales()).map(([name, data]) => 
+                                        React.createElement('tr', { key: name },
+                                            React.createElement('td', { className: "p-3 text-sm" }, name),
+                                            React.createElement('td', { className: "p-3 text-sm text-center font-bold bg-gray-50" }, data.qty),
+                                            React.createElement('td', { className: "p-3 text-sm text-right text-green-700" }, `R$ ${data.total.toFixed(2)}`)
+                                        )
+                                    ),
+                                    salesHistory.length === 0 && React.createElement('tr', null,
+                                        React.createElement('td', { colSpan: 3, className: "p-8 text-center text-gray-400" }, "Nenhuma venda hoje.")
+                                    )
+                                )
+                            )
+                        ),
+                        React.createElement('button', { onClick: resetSales, className: "w-full mt-8 border border-red-200 text-red-600 bg-red-50 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-red-100" },
+                            React.createElement(RefreshCcw, { size: 18 }), " Iniciar Novo Dia"
+                        )
+                    ),
+
+                    // MENU TAB
+                    activeTab === 'menu' && React.createElement('div', { className: "p-4" },
+                        React.createElement('h2', { className: "text-xl font-bold mb-4 text-gray-800 flex items-center gap-2" },
+                            React.createElement(Settings), " Gerenciar Produtos"
+                        ),
+                        React.createElement('div', { className: "bg-white p-4 rounded-xl shadow mb-6" },
+                            React.createElement('h3', { className: "font-semibold mb-3 text-sm text-gray-500 uppercase" }, "Adicionar Novo"),
+                            React.createElement('div', { className: "grid gap-3" },
+                                React.createElement('input', { 
+                                    type: "text", 
+                                    placeholder: "Nome (ex: X-Bacon)", 
+                                    className: "border p-3 rounded-lg w-full",
+                                    value: newItem.name,
+                                    onChange: e => setNewItem({...newItem, name: e.target.value})
+                                }),
+                                React.createElement('div', { className: "flex gap-3" },
+                                    React.createElement('input', { 
+                                        type: "number", 
+                                        placeholder: "Preço", 
+                                        className: "border p-3 rounded-lg w-full",
+                                        value: newItem.price,
+                                        onChange: e => setNewItem({...newItem, price: e.target.value})
+                                    }),
+                                    React.createElement('button', { onClick: addMenuItem, className: "bg-green-600 text-white px-6 rounded-lg font-bold" },
+                                        React.createElement(Plus)
+                                    )
+                                )
+                            )
+                        ),
+                        React.createElement('div', { className: "space-y-2" },
+                            menu.map(item => 
+                                React.createElement('div', { key: item.id, className: "flex justify-between items-center bg-white p-3 rounded-lg shadow-sm border border-gray-100" },
+                                    React.createElement('div', null,
+                                        React.createElement('p', { className: "font-bold text-gray-800" }, item.name),
+                                        React.createElement('p', { className: "text-sm text-green-600 font-medium" }, `R$ ${item.price.toFixed(2)}`)
+                                    ),
+                                    React.createElement('button', { onClick: () => deleteMenuItem(item.id), className: "p-2 text-red-400" },
+                                        React.createElement(Trash2, { size: 18 })
+                                    )
+                                )
+                            )
+                        )
+                    )
+                ),
+
+                // Navigation
+                React.createElement('nav', { className: "bg-white border-t border-gray-200 flex justify-around p-2 fixed bottom-0 w-full z-30 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]" },
+                    React.createElement('button', { onClick: () => setActiveTab('pos'), className: `flex flex-col items-center p-2 rounded-lg flex-1 ${activeTab === 'pos' ? 'text-red-600 bg-red-50' : 'text-gray-400'}` },
+                        React.createElement(Coffee, { size: 24 }),
+                        React.createElement('span', { className: "text-xs font-medium mt-1" }, "Vender")
+                    ),
+                    React.createElement('button', { onClick: () => setActiveTab('report'), className: `flex flex-col items-center p-2 rounded-lg flex-1 ${activeTab === 'report' ? 'text-blue-600 bg-blue-50' : 'text-gray-400'}` },
+                        React.createElement(FileText, { size: 24 }),
+                        React.createElement('span', { className: "text-xs font-medium mt-1" }, "Relatório")
+                    ),
+                    React.createElement('button', { onClick: () => setActiveTab('menu'), className: `flex flex-col items-center p-2 rounded-lg flex-1 ${activeTab === 'menu' ? 'text-gray-800 bg-gray-100' : 'text-gray-400'}` },
+                        React.createElement(Settings, { size: 24 }),
+                        React.createElement('span', { className: "text-xs font-medium mt-1" }, "Cardápio")
+                    )
+                )
+            );
+        }
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(React.createElement(App));
+    </script>
+</body>
+</html>
