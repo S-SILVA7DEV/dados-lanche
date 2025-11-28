@@ -53,7 +53,7 @@
             ShoppingCart, Plus, Minus, Trash2, Settings, DollarSign, XCircle, Coffee, 
             Utensils, TrendingUp, RefreshCcw, AlertCircle, CreditCard, Banknote, QrCode, 
             Wallet, X, Calculator, Moon, Sun, ClipboardList, Save, ChevronDown, ChevronUp,
-            User, Lock, LogOut, ChefHat, KeyRound, ArrowLeft, Loader2, AlertTriangle, WifiOff, Database
+            User, Lock, LogOut, ChefHat, KeyRound, ArrowLeft, Loader2, AlertTriangle, Clock, List
         } from 'lucide-react';
 
         // --- CAMADA DE SEGURANÇA ---
@@ -67,6 +67,14 @@
                 if (isNaN(num)) return "0.00";
                 return num.toFixed(2);
             } catch (e) { return "0.00"; }
+        };
+
+        // Função para formatar hora (HH:MM)
+        const formatTime = (isoDate) => {
+            try {
+                const date = new Date(isoDate);
+                return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            } catch (e) { return "--:--"; }
         };
 
         // Funções de Banco
@@ -116,7 +124,7 @@
             const [menu, setMenu] = useState([]);
             const [salesHistory, setSalesHistory] = useState([]);
             const [openOrders, setOpenOrders] = useState([]);
-            const [settings, setSettings] = useState({ openingCash: 0, adminPassword: '73931249', isDark: false });
+            const [settings, setSettings] = useState({ openingCash: 0, adminPassword: '1234', isDark: false });
             
             // UI
             const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -124,7 +132,10 @@
             const [showCalc, setShowCalc] = useState(false);
             const [calcDisplay, setCalcDisplay] = useState('0');
             const [newCalcNumber, setNewCalcNumber] = useState(true);
-            const [showDetails, setShowDetails] = useState(false);
+            
+            // UI Relatório (Novo)
+            const [reportView, setReportView] = useState('summary'); // 'summary' (Resumo) ou 'history' (Extrato)
+            const [showDetails, setShowDetails] = useState(false); // Toggle geral de detalhes
             
             // Inputs
             const [newItem, setNewItem] = useState({ name: '', price: '', category: 'Lanches' });
@@ -177,12 +188,20 @@
                         }
 
                         if (!newRow.collection || !newRow.collection.startsWith(COLLECTION_PREFIX)) return;
+
                         const collectionType = newRow.collection.replace(COLLECTION_PREFIX + '_', '');
                         const item = { ...newRow.content, id: newRow.id };
 
                         if (eventType === 'INSERT' || eventType === 'UPDATE') {
                             if (collectionType === 'menu') setMenu(prev => { const idx = prev.findIndex(p => p.id === newRow.id); return idx > -1 ? prev.map((p, i) => i === idx ? item : p) : [...prev, item]; });
-                            if (collectionType === 'sales') setSalesHistory(prev => prev.some(s => s.id === item.id) ? prev : [...prev, item]);
+                            if (collectionType === 'sales') setSalesHistory(prev => { 
+                                // Verifica se já existe para evitar duplicata visual
+                                const exists = prev.some(s => s.id === item.id);
+                                if (exists) return prev;
+                                // Adiciona e ordena por data (mais recente primeiro)
+                                const newList = [...prev, item];
+                                return newList.sort((a, b) => new Date(b.date) - new Date(a.date));
+                            });
                             if (collectionType === 'orders') setOpenOrders(prev => { const idx = prev.findIndex(p => p.id === newRow.id); return idx > -1 ? prev.map((p, i) => i === idx ? item : p) : [...prev, item]; });
                             if (collectionType === 'settings' || collectionType === 'config') setSettings(item);
                         }
@@ -224,57 +243,33 @@
             };
             const removeFromCart = (id) => setCart(prev => prev.filter(i => i.id !== id));
             const updateQty = (id, delta) => setCart(prev => prev.map(i => i.id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i));
-            const cancelOrder = () => { if(confirm('Limpar pedido atual da tela?')) { setCart([]); setActiveOrderId(null); setActiveOrderName(''); } };
+            const cancelOrder = () => { if(confirm('Limpar?')) { setCart([]); setActiveOrderId(null); setActiveOrderName(''); } };
             const cartTotal = cart.reduce((acc, item) => acc + (parseFloat(item.price||0) * (item.qty||1)), 0);
 
-            const handleOpenNameModal = () => {
-                if (cart.length > 0) {
-                    setTempOrderName(activeOrderName || '');
-                    setShowNameModal(true);
-                }
-            };
+            const handleOpenNameModal = () => { if (cart.length > 0) { setTempOrderName(activeOrderName || ''); setShowNameModal(true); } };
+            const openPaymentModal = () => { if (cart.length > 0) setShowPaymentModal(true); };
 
-            const openPaymentModal = () => {
-                if (cart.length > 0) {
-                    setShowPaymentModal(true);
-                }
-            };
-
-            // SALVAR COMANDA
             const saveOrder = async () => {
                 const name = tempOrderName.trim() || `Pedido #${Math.floor(Math.random()*1000)}`;
                 const orderContent = { name, items: cart, total: cartTotal, updatedAt: new Date().toISOString() };
                 await upsertData('orders', activeOrderId, orderContent);
                 setCart([]); setActiveOrderId(null); setTempOrderName(''); setShowNameModal(false);
             };
-            
-            // CARREGAR COMANDA
             const loadOrder = (order) => { setCart(order.items || []); setActiveOrderId(order.id); setActiveOrderName(order.name); setActiveTab('pos'); };
             
-            // FINALIZAR E EXCLUIR
             const finalizeSale = async (method) => {
                 const saleContent = { date: new Date().toISOString(), items: cart, total: cartTotal, method, customerName: activeOrderName || 'Balcão' };
                 await upsertData('sales', null, saleContent);
-                
-                if(activeOrderId) {
-                    await deleteData(activeOrderId);
-                    setOpenOrders(prev => prev.filter(o => o.id !== activeOrderId));
-                }
-                
+                if(activeOrderId) { await deleteData(activeOrderId); setOpenOrders(prev => prev.filter(o => o.id !== activeOrderId)); }
                 setCart([]); setActiveOrderId(null); setActiveOrderName(''); setShowPaymentModal(false);
             };
 
-            // NOVA FUNÇÃO: EXCLUIR COMANDA
-            const deleteOrder = async (id) => {
-                if(confirm('Tem certeza que deseja EXCLUIR esta comanda permanentemente?')) {
-                    await deleteData(id);
+            const deleteOrder = async (id, e) => {
+                e.stopPropagation();
+                if(confirm('Excluir comanda?')) {
                     setOpenOrders(prev => prev.filter(o => o.id !== id));
-                    // Se a comanda excluída estiver aberta na tela de venda, limpa a tela
-                    if(activeOrderId === id) {
-                        setCart([]);
-                        setActiveOrderId(null);
-                        setActiveOrderName('');
-                    }
+                    await deleteData(id);
+                    if(activeOrderId === id) { setCart([]); setActiveOrderId(null); setActiveOrderName(''); }
                 }
             };
 
@@ -283,14 +278,11 @@
             const updateSettings = (newValues) => upsertData('settings', 'config', { ...settings, ...newValues });
             
             const resetSales = async () => { 
-                if(confirm('ATENÇÃO: Isso apagará todas as vendas e reiniciará o dia. Confirmar?')) {
+                if(confirm('ATENÇÃO: Isso apagará todas as vendas. Confirmar?')) {
                     await updateSettings({ openingCash: 0 }); 
                     if (window.isConfigured) {
                          const { error } = await window.supabase.from('trailer_data').delete().eq('collection', `${COLLECTION_PREFIX}_sales`);
-                         if(!error) {
-                             setSalesHistory([]);
-                             alert("Caixa fechado!");
-                         }
+                         if(!error) { setSalesHistory([]); alert("Caixa fechado!"); }
                     }
                 } 
             };
@@ -299,10 +291,43 @@
 
             const handleCalcInput = (v) => { if(v==='C'){ setCalcDisplay('0'); setNewCalcNumber(true); return; } if(v==='='){ try { setCalcDisplay(String(parseFloat(new Function('return '+calcDisplay.replace(/x/g,'*').replace(/÷/g,'/'))().toFixed(2)))); } catch(e){setCalcDisplay('Erro');} setNewCalcNumber(true); return; } if(['+','-','x','÷'].includes(v)){ setCalcDisplay(calcDisplay+' '+v+' '); setNewCalcNumber(false); return; } if(newCalcNumber){ setCalcDisplay(v); setNewCalcNumber(false); } else { setCalcDisplay(calcDisplay==='0'?v:calcDisplay+v); } };
             const CalcButton = ({ label, color, wide }) => <button onClick={()=>handleCalcInput(label)} className={`${color||(isDark?'bg-gray-700 border-gray-600':'bg-gray-100 border-gray-300')} ${wide?'col-span-2':''} p-4 rounded-xl text-xl font-bold shadow-sm border-b-2 active:border-b-0`}>{label}</button>;
+            
             const salesByMethod = salesHistory.reduce((acc, s) => { acc[s.method] = (acc[s.method]||0) + (Number(s.total)||0); return acc; }, { money: 0, pix: 0, card: 0 });
             const finalCash = (Number(settings.openingCash)||0) + salesByMethod.money;
             const itemsByMethod = (() => { const d={money:{},pix:{},card:{}}; salesHistory.forEach(s=>{ const m=s.method||'money'; if(s.items) s.items.forEach(i=>{ if(!d[m][i.name])d[m][i.name]={qty:0,total:0}; d[m][i.name].qty+=i.qty; d[m][i.name].total+=(Number(i.price)||0)*i.qty; }); }); return d; })();
+            
             const DetailList = ({ title, icon: I, colorClass, data, total }) => Object.keys(data).length > 0 ? <div className={`mt-2 ${isDark?'bg-gray-800':'bg-white'} rounded-xl border ${isDark?'border-gray-700':'border-gray-200'} overflow-hidden`}><div className={`p-3 flex justify-between items-center ${colorClass} bg-opacity-10`}><div className="flex items-center gap-2 font-bold"><I size={18}/><span>{title}</span></div><span className="font-bold">R$ {formatMoney(total)}</span></div><div className="divide-y divide-gray-100 dark:divide-gray-700">{Object.entries(data).map(([n, i]) => <div key={n} className="flex justify-between p-3 text-sm"><span className={theme.text}>{n} <span className="opacity-60">x{i.qty}</span></span><span className={theme.textSec}>R$ {formatMoney(i.total)}</span></div>)}</div></div> : null;
+
+            // NOVO COMPONENTE: Lista de Histórico (Extrato)
+            const HistoryLog = ({ sales }) => (
+                <div className={`mt-4 space-y-3`}>
+                    <div className="flex items-center gap-2 mb-2 opacity-60 text-sm uppercase font-bold tracking-wider px-1">
+                        <Clock size={14} /> Histórico de Transações
+                    </div>
+                    {sales.length === 0 && <p className="text-center text-sm opacity-50 py-4">Nenhuma venda hoje.</p>}
+                    {sales.sort((a,b) => new Date(b.date) - new Date(a.date)).map(sale => (
+                        <div key={sale.id} className={`${theme.card} p-3 rounded-xl border flex justify-between items-center animate-fade-in`}>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <span className={`font-bold ${theme.text} text-sm`}>{formatTime(sale.date)}</span>
+                                    <span className={`text-xs ${theme.textSec}`}>• {sale.customerName || 'Balcão'}</span>
+                                </div>
+                                <div className={`text-xs ${theme.textSec} mt-1`}>
+                                    {sale.items.map(i => `${i.qty}x ${i.name}`).join(', ')}
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <div className={`font-bold ${theme.text}`}>R$ {formatMoney(sale.total)}</div>
+                                <div className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded inline-block mt-1
+                                    ${sale.method === 'money' ? 'bg-green-100 text-green-700' : 
+                                      sale.method === 'pix' ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-700'}`}>
+                                    {sale.method === 'money' ? 'DIN' : sale.method.toUpperCase()}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
 
             // --- RENDERIZAÇÃO ---
             if (loading) return <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white"><Loader2 className="animate-spin mb-4" size={48}/><p>Conectando...</p></div>;
@@ -318,7 +343,7 @@
                                 <h2 className="text-lg font-bold text-gray-700">Acesso Gerente</h2>
                                 <div className={`flex items-center border-2 rounded-xl p-3 bg-gray-50 ${loginError ? 'border-red-500 animate-shake' : 'border-gray-200'}`}>
                                     <KeyRound className="text-gray-400 mr-3" />
-                                    <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="bg-transparent outline-none w-full text-lg font-bold text-gray-700" placeholder="Senha" inputMode="numeric" autoFocus />
+                                    <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="bg-transparent outline-none w-full text-lg font-bold text-gray-700" placeholder="Senha (1234)" inputMode="numeric" autoFocus />
                                 </div>
                                 <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl">ENTRAR</button>
                              </form>
@@ -369,19 +394,7 @@
                         {activeTab === 'orders' && (
                             <div className="p-4 space-y-4">
                                 <h2 className="text-2xl font-bold flex items-center gap-2"><ClipboardList /> {userRole === 'cozinha' ? 'Fila de Produção' : 'Comandas Abertas'}</h2>
-                                {openOrders.length === 0 ? <p className="text-center opacity-50 py-10">Tudo limpo!</p> : <div className="grid gap-3">{openOrders.map(order => (
-                                    <div key={order.id} className={`${theme.card} p-4 rounded-xl shadow-sm border flex justify-between items-start transition-all`}>
-                                        <div className="flex-1 cursor-pointer" onClick={() => userRole !== 'cozinha' && loadOrder(order)}>
-                                            <div className="flex justify-between items-start">
-                                                <div><h3 className="font-bold text-lg flex items-center gap-2"><User size={18} className="text-blue-500"/> {order.name}</h3><p className="text-xs opacity-50">{new Date(order.updatedAt).toLocaleTimeString().slice(0,5)}</p></div>
-                                                {userRole !== 'cozinha' && <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-lg font-bold">R$ {formatMoney(order.total)}</span>}
-                                            </div>
-                                            <div className="mt-3 text-sm font-mono border-t pt-2 border-dashed border-gray-300 dark:border-gray-600">{order.items.map(i => <div key={i.id} className="flex justify-between"><span>{i.qty}x {i.name}</span></div>)}</div>
-                                            {userRole !== 'cozinha' && <div className="mt-2 text-center text-blue-500 text-xs font-bold">Toque para editar/pagar</div>}
-                                        </div>
-                                        {userRole !== 'cozinha' && <button onClick={() => deleteOrder(order.id)} className="ml-3 p-2 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"><Trash2 size={20} /></button>}
-                                    </div>
-                                ))}</div>}
+                                {openOrders.length === 0 ? <p className="text-center opacity-50 py-10">Tudo limpo!</p> : <div className="grid gap-3">{openOrders.map(order => <button key={order.id} onClick={() => userRole !== 'cozinha' && loadOrder(order)} className={`${theme.card} p-4 rounded-xl shadow-sm border text-left ${userRole === 'cozinha' ? 'cursor-default' : 'active:scale-95 transition-transform'}`}><div className="flex justify-between items-start"><div><h3 className="font-bold text-lg flex items-center gap-2"><User size={18} className="text-blue-500"/> {order.name}</h3><p className="text-xs opacity-50">{new Date(order.updatedAt).toLocaleTimeString().slice(0,5)}</p></div>{userRole !== 'cozinha' && <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-lg font-bold">R$ {formatMoney(order.total)}</span>}</div><div className="mt-3 text-sm font-mono border-t pt-2 border-dashed border-gray-300 dark:border-gray-600">{order.items.map(i => <div key={i.id} className="flex justify-between"><span>{i.qty}x {i.name}</span></div>)}</div>{userRole !== 'cozinha' && <div className="mt-2 text-center text-blue-500 text-xs font-bold">Toque para editar/pagar</div>}</button>)}</div>}
                             </div>
                         )}
 
@@ -391,8 +404,26 @@
                                 <div className={`${theme.card} p-4 rounded-xl border-l-4 border-gray-400 flex justify-between items-center`}><span>Troco Inicial</span>{!editingOpeningCash ? <div className="flex gap-2 items-center"><span className="font-bold">R$ {formatMoney(settings.openingCash)}</span><button onClick={()=>{setTempOpeningCash(settings.openingCash);setEditingOpeningCash(true)}} className="text-blue-500 text-xs px-2">EDITAR</button></div> : <div className="flex gap-2"><input type="number" value={tempOpeningCash} onChange={e=>setTempOpeningCash(e.target.value)} className={`border w-20 rounded p-1 ${theme.input}`}/><button onClick={updateOpeningCash} className="bg-green-500 text-white px-2 rounded">OK</button></div>}</div>
                                 <div className="grid grid-cols-3 gap-2 text-center text-sm font-bold"><div className="bg-green-100 text-green-800 p-2 rounded">Dinheiro<br/>R$ {formatMoney(salesByMethod.money)}</div><div className="bg-teal-100 text-teal-800 p-2 rounded">PIX<br/>R$ {formatMoney(salesByMethod.pix)}</div><div className="bg-blue-100 text-blue-800 p-2 rounded">Cartão<br/>R$ {formatMoney(salesByMethod.card)}</div></div>
                                 <div className="bg-gray-800 text-white p-4 rounded-xl"><h3 className="text-gray-400 text-xs uppercase mb-2">Total Gaveta (Físico)</h3><div className="text-3xl font-bold text-green-400">R$ {formatMoney(finalCash)}</div></div>
-                                <button onClick={()=>setShowDetails(!showDetails)} className={`w-full p-3 border rounded ${theme.card} flex justify-between items-center`}><span>Ver Detalhes</span> {showDetails?<ChevronUp/>:<ChevronDown/>}</button>
-                                {showDetails && <div className="space-y-2 animate-fade-in"><DetailList title="Dinheiro" icon={Banknote} colorClass="text-green-600 bg-green-100" data={itemsByMethod.money} total={salesByMethod.money}/><DetailList title="PIX" icon={QrCode} colorClass="text-teal-600 bg-teal-100" data={itemsByMethod.pix} total={salesByMethod.pix}/><DetailList title="Cartão" icon={CreditCard} colorClass="text-blue-600 bg-blue-100" data={itemsByMethod.card} total={salesByMethod.card}/></div>}
+                                
+                                {/* ALTERNÂNCIA DE VISTAS DE RELATÓRIO */}
+                                <div className="flex rounded-lg overflow-hidden border border-gray-500/30">
+                                    <button onClick={() => setReportView('summary')} className={`flex-1 p-3 text-sm font-bold ${reportView === 'summary' ? 'bg-blue-600 text-white' : `${theme.card}`}`}>Resumo</button>
+                                    <button onClick={() => setReportView('history')} className={`flex-1 p-3 text-sm font-bold ${reportView === 'history' ? 'bg-blue-600 text-white' : `${theme.card}`}`}>Extrato</button>
+                                </div>
+
+                                {/* CONTEÚDO DO RELATÓRIO */}
+                                {reportView === 'summary' && showDetails && (
+                                    <div className="space-y-2 animate-fade-in"><DetailList title="Dinheiro" icon={Banknote} colorClass="text-green-600 bg-green-100" data={itemsByMethod.money} total={salesByMethod.money}/><DetailList title="PIX" icon={QrCode} colorClass="text-teal-600 bg-teal-100" data={itemsByMethod.pix} total={salesByMethod.pix}/><DetailList title="Cartão" icon={CreditCard} colorClass="text-blue-600 bg-blue-100" data={itemsByMethod.card} total={salesByMethod.card}/></div>
+                                )}
+
+                                {reportView === 'history' && (
+                                    <HistoryLog sales={salesHistory} />
+                                )}
+                                
+                                {reportView === 'summary' && !showDetails && (
+                                    <button onClick={()=>setShowDetails(true)} className={`w-full p-3 border border-dashed rounded ${theme.card} text-sm opacity-70`}>Toque para ver detalhes por item</button>
+                                )}
+
                                 <button onClick={resetSales} className="w-full mt-4 bg-red-100 text-red-600 p-3 rounded font-bold flex justify-center gap-2"><RefreshCcw/> FECHAR CAIXA</button>
                             </div>
                         )}
