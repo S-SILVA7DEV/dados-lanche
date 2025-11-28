@@ -14,7 +14,8 @@
             "react": "https://esm.sh/react@18.2.0",
             "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
             "lucide-react": "https://esm.sh/lucide-react@0.263.1", 
-            "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
+            "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2",
+            "recharts": "https://esm.sh/recharts@2.12.0?external=react,react-dom"
         }
     }
     </script>
@@ -53,11 +54,14 @@
             ShoppingCart, Plus, Minus, Trash2, Settings, DollarSign, XCircle, Coffee, 
             Utensils, TrendingUp, RefreshCcw, AlertCircle, CreditCard, Banknote, QrCode, 
             Wallet, X, Calculator, Moon, Sun, ClipboardList, Save, ChevronDown, ChevronUp,
-            User, Lock, LogOut, ChefHat, KeyRound, ArrowLeft, Loader2, AlertTriangle, Clock, List
+            User, Lock, LogOut, ChefHat, KeyRound, ArrowLeft, Loader2, AlertTriangle, Clock
         } from 'lucide-react';
+        
+        import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
         // --- CAMADA DE SEGURANÇA ---
         const COLLECTION_PREFIX = 'trailer_data_clean_v2'; 
+        const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
         const generateId = () => 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 
@@ -69,7 +73,6 @@
             } catch (e) { return "0.00"; }
         };
 
-        // Função para formatar hora (HH:MM)
         const formatTime = (isoDate) => {
             try {
                 const date = new Date(isoDate);
@@ -77,7 +80,6 @@
             } catch (e) { return "--:--"; }
         };
 
-        // Funções de Banco
         const upsertData = async (collection, id, content) => {
             if (!window.isConfigured) return;
             const finalId = id || generateId();
@@ -88,8 +90,7 @@
 
         const deleteData = async (id) => {
             if (!window.isConfigured) return;
-            const { error } = await window.supabase.from('trailer_data').delete().eq('id', id);
-            if (error) console.error("Erro ao deletar:", error);
+            await window.supabase.from('trailer_data').delete().eq('id', id);
         };
 
         const loadData = async (collection) => {
@@ -108,6 +109,65 @@
                 return this.props.children;
             }
         }
+
+        // --- TELA DE LOGIN (COM CRÉDITOS) ---
+        const LoginScreen = ({ onLogin, adminPassword }) => {
+            const [selectedRole, setSelectedRole] = useState(null);
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState(false);
+            const inputRef = useRef(null);
+
+            useEffect(() => { if (selectedRole === 'gerente' && inputRef.current) inputRef.current.focus(); }, [selectedRole]);
+
+            const handlePasswordSubmit = (e) => {
+                e.preventDefault();
+                if (password === adminPassword) onLogin('gerente');
+                else { setError(true); setPassword(''); setTimeout(() => setError(false), 500); }
+            };
+
+            if (selectedRole === 'gerente') {
+                return (
+                    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl p-8 w-full max-w-md text-center shadow-xl animate-slide-up relative">
+                            <button onClick={()=>setSelectedRole(null)} className="absolute top-4 left-4 p-2 hover:bg-gray-100 rounded-full"><ArrowLeft size={24}/></button>
+                            <div className="bg-blue-600 p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center"><Utensils className="text-white" size={32} /></div>
+                            <h1 className="text-2xl font-bold text-gray-800 mb-6">Trailer System</h1>
+                            <form onSubmit={handlePasswordSubmit} className="space-y-4 animate-fade-in">
+                                <h2 className="text-lg font-bold text-gray-700">Acesso Gerente</h2>
+                                <div className={`flex items-center border-2 rounded-xl p-3 bg-gray-50 ${error ? 'border-red-500' : 'border-gray-200'}`}>
+                                    <KeyRound className="text-gray-400 mr-3" />
+                                    <input ref={inputRef} type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="bg-transparent outline-none w-full text-lg font-bold text-gray-700" placeholder="Senha" inputMode="numeric" />
+                                </div>
+                                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl">ENTRAR</button>
+                            </form>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl p-8 w-full max-w-md text-center shadow-xl animate-slide-up relative">
+                        <div className="bg-blue-600 p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center"><Utensils className="text-white" size={32} /></div>
+                        <h1 className="text-2xl font-bold text-gray-800 mb-6">Trailer System</h1>
+                        
+                        <div className="space-y-3">
+                            <button onClick={()=>setSelectedRole('gerente')} className="w-full p-4 bg-gray-800 text-white rounded-xl flex items-center justify-between hover:bg-gray-700 shadow-md"><div className="flex items-center gap-3"><Lock size={20} className="text-yellow-400"/><div className="text-left"><span className="block font-bold">Gerente</span><span className="text-xs text-gray-400">Senha Necessária</span></div></div><span>→</span></button>
+                            <button onClick={()=>onLogin('garcom')} className="w-full p-4 border rounded-xl flex items-center gap-3 hover:bg-gray-50"><User className="text-blue-500"/><span className="font-bold">Garçom</span></button>
+                            <button onClick={()=>onLogin('cozinha')} className="w-full p-4 border rounded-xl flex items-center gap-3 hover:bg-gray-50"><ChefHat className="text-red-500"/><span className="font-bold">Cozinha</span></button>
+                        </div>
+
+                        {/* CRÉDITOS AQUI */}
+                        <div className="mt-8 pt-4 border-t border-gray-100">
+                            <p className="text-xs text-gray-400 font-medium">
+                                Desenvolvido por <span className="text-blue-600 font-bold">Steven Oliveira</span>
+                            </p>
+                        </div>
+
+                    </div>
+                </div>
+            );
+        };
 
         // --- COMPONENTE PRINCIPAL ---
         function App() {
@@ -132,10 +192,8 @@
             const [showCalc, setShowCalc] = useState(false);
             const [calcDisplay, setCalcDisplay] = useState('0');
             const [newCalcNumber, setNewCalcNumber] = useState(true);
-            
-            // UI Relatório (Novo)
-            const [reportView, setReportView] = useState('summary'); // 'summary' (Resumo) ou 'history' (Extrato)
-            const [showDetails, setShowDetails] = useState(false); // Toggle geral de detalhes
+            const [showDetails, setShowDetails] = useState(false);
+            const [reportView, setReportView] = useState('summary');
             
             // Inputs
             const [newItem, setNewItem] = useState({ name: '', price: '', category: 'Lanches' });
@@ -144,11 +202,6 @@
             const [editingOpeningCash, setEditingOpeningCash] = useState(false);
             const [tempOpeningCash, setTempOpeningCash] = useState('');
             
-            // Login
-            const [passwordInput, setPasswordInput] = useState('');
-            const [loginError, setLoginError] = useState(false);
-            const [selectedRoleLogin, setSelectedRoleLogin] = useState(null);
-
             // --- INICIALIZAÇÃO ---
             useEffect(() => {
                 if (!window.isConfigured) { setLoading(false); return; }
@@ -171,7 +224,7 @@
                         setMenu(reloadedMenu);
                     }
 
-                    if (s.length > 0) setSalesHistory(s);
+                    if (s.length > 0) setSalesHistory(s.sort((a,b) => new Date(b.date) - new Date(a.date)));
                     if (o.length > 0) setOpenOrders(o);
                     if (cfg.length > 0) setSettings(cfg[0]);
                     else upsertData('settings', 'config', settings);
@@ -195,10 +248,8 @@
                         if (eventType === 'INSERT' || eventType === 'UPDATE') {
                             if (collectionType === 'menu') setMenu(prev => { const idx = prev.findIndex(p => p.id === newRow.id); return idx > -1 ? prev.map((p, i) => i === idx ? item : p) : [...prev, item]; });
                             if (collectionType === 'sales') setSalesHistory(prev => { 
-                                // Verifica se já existe para evitar duplicata visual
                                 const exists = prev.some(s => s.id === item.id);
                                 if (exists) return prev;
-                                // Adiciona e ordena por data (mais recente primeiro)
                                 const newList = [...prev, item];
                                 return newList.sort((a, b) => new Date(b.date) - new Date(a.date));
                             });
@@ -213,16 +264,7 @@
             }, []);
 
             // --- LÓGICA DE NEGÓCIO ---
-            const handleLoginAttempt = (e) => {
-                e.preventDefault();
-                if (passwordInput === settings.adminPassword) {
-                    setUserRole('gerente'); setActiveTab('pos'); setPasswordInput(''); setSelectedRoleLogin(null);
-                } else {
-                    setLoginError(true); setTimeout(() => setLoginError(false), 500);
-                }
-            };
-
-            const handleSimpleLogin = (role) => { setUserRole(role); setActiveTab(role === 'cozinha' ? 'orders' : 'pos'); };
+            const handleLogin = (role) => { setUserRole(role); setActiveTab(role === 'cozinha' ? 'orders' : 'pos'); };
             const handleLogout = () => { setUserRole(null); setActiveTab('pos'); };
             const handleChangePassword = () => { if(newPassword.length<3)return alert("Curta demais"); upsertData('settings', 'config', { ...settings, adminPassword: newPassword }); alert("Senha alterada!"); setNewPassword(''); };
 
@@ -288,172 +330,9 @@
             };
             
             const updateOpeningCash = () => { updateSettings({ openingCash: parseFloat(tempOpeningCash)||0 }); setEditingOpeningCash(false); };
-
             const handleCalcInput = (v) => { if(v==='C'){ setCalcDisplay('0'); setNewCalcNumber(true); return; } if(v==='='){ try { setCalcDisplay(String(parseFloat(new Function('return '+calcDisplay.replace(/x/g,'*').replace(/÷/g,'/'))().toFixed(2)))); } catch(e){setCalcDisplay('Erro');} setNewCalcNumber(true); return; } if(['+','-','x','÷'].includes(v)){ setCalcDisplay(calcDisplay+' '+v+' '); setNewCalcNumber(false); return; } if(newCalcNumber){ setCalcDisplay(v); setNewCalcNumber(false); } else { setCalcDisplay(calcDisplay==='0'?v:calcDisplay+v); } };
             const CalcButton = ({ label, color, wide }) => <button onClick={()=>handleCalcInput(label)} className={`${color||(isDark?'bg-gray-700 border-gray-600':'bg-gray-100 border-gray-300')} ${wide?'col-span-2':''} p-4 rounded-xl text-xl font-bold shadow-sm border-b-2 active:border-b-0`}>{label}</button>;
             
             const salesByMethod = salesHistory.reduce((acc, s) => { acc[s.method] = (acc[s.method]||0) + (Number(s.total)||0); return acc; }, { money: 0, pix: 0, card: 0 });
             const finalCash = (Number(settings.openingCash)||0) + salesByMethod.money;
-            const itemsByMethod = (() => { const d={money:{},pix:{},card:{}}; salesHistory.forEach(s=>{ const m=s.method||'money'; if(s.items) s.items.forEach(i=>{ if(!d[m][i.name])d[m][i.name]={qty:0,total:0}; d[m][i.name].qty+=i.qty; d[m][i.name].total+=(Number(i.price)||0)*i.qty; }); }); return d; })();
-            
-            const DetailList = ({ title, icon: I, colorClass, data, total }) => Object.keys(data).length > 0 ? <div className={`mt-2 ${isDark?'bg-gray-800':'bg-white'} rounded-xl border ${isDark?'border-gray-700':'border-gray-200'} overflow-hidden`}><div className={`p-3 flex justify-between items-center ${colorClass} bg-opacity-10`}><div className="flex items-center gap-2 font-bold"><I size={18}/><span>{title}</span></div><span className="font-bold">R$ {formatMoney(total)}</span></div><div className="divide-y divide-gray-100 dark:divide-gray-700">{Object.entries(data).map(([n, i]) => <div key={n} className="flex justify-between p-3 text-sm"><span className={theme.text}>{n} <span className="opacity-60">x{i.qty}</span></span><span className={theme.textSec}>R$ {formatMoney(i.total)}</span></div>)}</div></div> : null;
-
-            // NOVO COMPONENTE: Lista de Histórico (Extrato)
-            const HistoryLog = ({ sales }) => (
-                <div className={`mt-4 space-y-3`}>
-                    <div className="flex items-center gap-2 mb-2 opacity-60 text-sm uppercase font-bold tracking-wider px-1">
-                        <Clock size={14} /> Histórico de Transações
-                    </div>
-                    {sales.length === 0 && <p className="text-center text-sm opacity-50 py-4">Nenhuma venda hoje.</p>}
-                    {sales.sort((a,b) => new Date(b.date) - new Date(a.date)).map(sale => (
-                        <div key={sale.id} className={`${theme.card} p-3 rounded-xl border flex justify-between items-center animate-fade-in`}>
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <span className={`font-bold ${theme.text} text-sm`}>{formatTime(sale.date)}</span>
-                                    <span className={`text-xs ${theme.textSec}`}>• {sale.customerName || 'Balcão'}</span>
-                                </div>
-                                <div className={`text-xs ${theme.textSec} mt-1`}>
-                                    {sale.items.map(i => `${i.qty}x ${i.name}`).join(', ')}
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <div className={`font-bold ${theme.text}`}>R$ {formatMoney(sale.total)}</div>
-                                <div className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded inline-block mt-1
-                                    ${sale.method === 'money' ? 'bg-green-100 text-green-700' : 
-                                      sale.method === 'pix' ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-700'}`}>
-                                    {sale.method === 'money' ? 'DIN' : sale.method.toUpperCase()}
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            );
-
-            // --- RENDERIZAÇÃO ---
-            if (loading) return <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white"><Loader2 className="animate-spin mb-4" size={48}/><p>Conectando...</p></div>;
-
-            if (!userRole) return (
-                <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl p-8 w-full max-w-md text-center shadow-xl animate-slide-up relative">
-                        {selectedRoleLogin === 'gerente' && <button onClick={()=>setSelectedRoleLogin(null)} className="absolute top-4 left-4 p-2 hover:bg-gray-100 rounded-full"><ArrowLeft size={24}/></button>}
-                        <div className="bg-blue-600 p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center"><Utensils className="text-white" size={32} /></div>
-                        <h1 className="text-2xl font-bold text-gray-800 mb-6">Trailer System</h1>
-                        {selectedRoleLogin === 'gerente' ? (
-                             <form onSubmit={handleLoginAttempt} className="space-y-4 animate-fade-in">
-                                <h2 className="text-lg font-bold text-gray-700">Acesso Gerente</h2>
-                                <div className={`flex items-center border-2 rounded-xl p-3 bg-gray-50 ${loginError ? 'border-red-500 animate-shake' : 'border-gray-200'}`}>
-                                    <KeyRound className="text-gray-400 mr-3" />
-                                    <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="bg-transparent outline-none w-full text-lg font-bold text-gray-700" placeholder="Senha (1234)" inputMode="numeric" autoFocus />
-                                </div>
-                                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl">ENTRAR</button>
-                             </form>
-                        ) : (
-                            <div className="space-y-3 animate-fade-in">
-                                <button onClick={()=>setSelectedRoleLogin('gerente')} className="w-full p-4 bg-gray-800 text-white rounded-xl flex items-center justify-between hover:bg-gray-700 shadow-md"><div className="flex items-center gap-3"><Lock size={20} className="text-yellow-400"/><div className="text-left"><span className="block font-bold">Gerente</span><span className="text-xs text-gray-400">Senha Necessária</span></div></div><span>→</span></button>
-                                <button onClick={()=>handleSimpleLogin('garcom')} className="w-full p-4 border rounded-xl flex items-center gap-3 hover:bg-gray-50"><User className="text-blue-500"/><span className="font-bold">Garçom</span></button>
-                                <button onClick={()=>handleSimpleLogin('cozinha')} className="w-full p-4 border rounded-xl flex items-center gap-3 hover:bg-gray-50"><ChefHat className="text-red-500"/><span className="font-bold">Cozinha</span></button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-
-            return (
-                <div className={`flex flex-col h-screen relative transition-colors duration-300 ${theme.bg} ${theme.text}`}>
-                    {showNameModal && <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in"><div className={`${theme.card} p-6 rounded-2xl w-full max-w-sm shadow-2xl animate-slide-up`}><h3 className="font-bold text-xl mb-2">Identificar Comanda</h3><input value={tempOrderName} onChange={e=>setTempOrderName(e.target.value)} className={`w-full p-3 rounded-lg border mb-4 ${theme.input}`} autoFocus placeholder="Nome ou Mesa" /><div className="flex gap-3"><button onClick={()=>setShowNameModal(false)} className="flex-1 p-3 border border-red-400 text-red-500 rounded-lg font-bold">Cancelar</button><button onClick={saveOrder} className="flex-1 p-3 bg-blue-600 text-white rounded-lg font-bold">Salvar</button></div></div></div>}
-                    {showCalc && <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in"><div className={`${isDark?'bg-gray-800':'bg-white'} p-4 rounded-3xl w-full max-w-xs animate-slide-up`}><div className="flex justify-between mb-4"><span className="font-bold">Calculadora</span><button onClick={()=>setShowCalc(false)}><X/></button></div><div className={`bg-gray-100 p-4 mb-4 text-right rounded-xl text-3xl font-mono text-gray-900`}>{calcDisplay}</div><div className="grid grid-cols-4 gap-3"><CalcButton label="C" color="bg-red-500 text-white"/><CalcButton label="÷"/><CalcButton label="x"/><CalcButton label="-"/><CalcButton label="7"/><CalcButton label="8"/><CalcButton label="9"/><CalcButton label="+"/><CalcButton label="4"/><CalcButton label="5"/><CalcButton label="6"/><CalcButton label="=" color="bg-green-600 text-white row-span-2 h-full flex items-center justify-center"/><CalcButton label="1"/><CalcButton label="2"/><CalcButton label="3"/><CalcButton label="0" wide/><CalcButton label="."/></div></div></div>}
-                    {showPaymentModal && <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-fade-in"><div className={`${theme.card} rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-slide-up`}><div className="flex justify-between mb-6"><h3 className="font-bold mb-4 text-xl">Total: R$ {formatMoney(cartTotal)}</h3><button onClick={()=>setShowPaymentModal(false)}><X/></button></div><div className="space-y-3"><button onClick={()=>finalizeSale('money')} className="w-full p-4 bg-green-100 text-green-800 rounded font-bold flex gap-2"><Banknote/> Dinheiro</button><button onClick={()=>finalizeSale('pix')} className="w-full p-4 bg-teal-100 text-teal-800 rounded font-bold flex gap-2"><QrCode/> PIX</button><button onClick={()=>finalizeSale('card')} className="w-full p-4 bg-blue-100 text-blue-800 rounded font-bold flex gap-2"><CreditCard/> Cartão</button></div></div></div>}
-
-                    <header className={`${isDark ? 'bg-red-900' : 'bg-red-700'} text-white p-3 shadow-md flex justify-between items-center z-10 transition-colors`}>
-                        <div className="flex items-center gap-3">
-                            <button onClick={()=>updateSettings({isDark:!settings.isDark})} className="bg-white/10 p-2 rounded-lg hover:bg-white/20 transition-colors border border-white/20">{isDark ? <Sun size={20} className="text-yellow-300" /> : <Moon size={20} className="text-white" />}</button>
-                            {userRole !== 'cozinha' && <button onClick={() => setShowCalc(true)} className="bg-white/10 p-2 rounded-lg hover:bg-white/20 transition-colors border border-white/20"><Calculator size={20} className="text-white" /></button>}
-                            <div><h1 className="text-lg font-bold leading-tight">Trailer System</h1><span className="text-xs opacity-70 border px-1 rounded block w-fit">{userRole}</span></div>
-                        </div>
-                        <button onClick={handleLogout} className="bg-black/20 p-2 rounded-lg flex items-center gap-1 text-xs"><LogOut size={16}/> Sair</button>
-                    </header>
-
-                    <main className="flex-1 overflow-y-auto pb-24">
-                        {activeTab === 'pos' && (
-                            <div className="p-4 space-y-4">
-                                {userRole === 'cozinha' ? <div className="text-center p-10 opacity-50"><ChefHat size={48} className="mx-auto mb-4"/>Acesso Restrito</div> : (
-                                    <>
-                                        {cart.length > 0 ? (
-                                            <div className={`${theme.card} p-4 rounded-xl shadow-lg border-l-4 border-l-yellow-400 mb-4 animate-fade-in`}>
-                                                <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-100 dark:border-gray-700"><h2 className="font-bold text-lg flex items-center gap-2"><ShoppingCart className="text-yellow-500"/> {activeOrderName || 'Pedido'}</h2><span className="bg-gray-900 text-white px-3 py-1 rounded-full font-bold">R$ {formatMoney(cartTotal)}</span></div>
-                                                <div className="space-y-3 mb-4">{cart.map(i => <div key={i.id} className="flex justify-between items-center"><div className="flex-1"><span className="font-bold">{i.name}</span><div className="text-xs">R$ {formatMoney(i.price)}</div></div><div className="flex items-center gap-3"><button onClick={()=>updateQty(i.id,-1)} className="p-1 bg-gray-200 dark:bg-gray-700 rounded"><Minus size={16}/></button><span className="font-bold w-6 text-center">{i.qty}</span><button onClick={()=>updateQty(i.id,1)} className="p-1 bg-green-100 text-green-700 rounded"><Plus size={16}/></button></div><button onClick={()=>removeFromCart(i.id)} className="ml-3 text-red-400"><Trash2/></button></div>)}</div>
-                                                <div className="grid grid-cols-2 gap-2 mt-4"><button onClick={cancelOrder} className="col-span-2 bg-red-100 text-red-700 py-3 rounded-lg font-bold text-sm">Cancelar</button><button onClick={handleOpenNameModal} className="bg-blue-600 text-white py-3 rounded-lg font-bold flex justify-center gap-2"><Save size={20}/> {activeOrderId?'Atualizar':'Pendurar'}</button><button onClick={openPaymentModal} className="bg-green-600 text-white py-3 rounded-lg font-bold flex justify-center gap-2"><DollarSign size={20}/> Receber</button></div>
-                                            </div>
-                                        ) : <div className={`text-center p-4 border rounded-xl opacity-50 ${theme.card}`}>Carrinho Vazio</div>}
-                                        <div className="grid grid-cols-2 gap-3">{menu.map(i => <button key={i.id} onClick={()=>addToCart(i)} className={`${theme.card} p-3 rounded-xl shadow-sm border-b-4 text-left hover:opacity-90 active:scale-95 transition-all`}><span className="font-bold block">{i.name}</span><span className="text-green-600 text-sm">R$ {formatMoney(i.price)}</span></button>)}</div>
-                                    </>
-                                )}
-                            </div>
-                        )}
-
-                        {activeTab === 'orders' && (
-                            <div className="p-4 space-y-4">
-                                <h2 className="text-2xl font-bold flex items-center gap-2"><ClipboardList /> {userRole === 'cozinha' ? 'Fila de Produção' : 'Comandas Abertas'}</h2>
-                                {openOrders.length === 0 ? <p className="text-center opacity-50 py-10">Tudo limpo!</p> : <div className="grid gap-3">{openOrders.map(order => <button key={order.id} onClick={() => userRole !== 'cozinha' && loadOrder(order)} className={`${theme.card} p-4 rounded-xl shadow-sm border text-left ${userRole === 'cozinha' ? 'cursor-default' : 'active:scale-95 transition-transform'}`}><div className="flex justify-between items-start"><div><h3 className="font-bold text-lg flex items-center gap-2"><User size={18} className="text-blue-500"/> {order.name}</h3><p className="text-xs opacity-50">{new Date(order.updatedAt).toLocaleTimeString().slice(0,5)}</p></div>{userRole !== 'cozinha' && <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-lg font-bold">R$ {formatMoney(order.total)}</span>}</div><div className="mt-3 text-sm font-mono border-t pt-2 border-dashed border-gray-300 dark:border-gray-600">{order.items.map(i => <div key={i.id} className="flex justify-between"><span>{i.qty}x {i.name}</span></div>)}</div>{userRole !== 'cozinha' && <div className="mt-2 text-center text-blue-500 text-xs font-bold">Toque para editar/pagar</div>}</button>)}</div>}
-                            </div>
-                        )}
-
-                        {activeTab === 'report' && userRole === 'gerente' && (
-                            <div className="p-4 space-y-4">
-                                <h2 className="text-2xl font-bold flex items-center gap-2"><TrendingUp /> Gestão</h2>
-                                <div className={`${theme.card} p-4 rounded-xl border-l-4 border-gray-400 flex justify-between items-center`}><span>Troco Inicial</span>{!editingOpeningCash ? <div className="flex gap-2 items-center"><span className="font-bold">R$ {formatMoney(settings.openingCash)}</span><button onClick={()=>{setTempOpeningCash(settings.openingCash);setEditingOpeningCash(true)}} className="text-blue-500 text-xs px-2">EDITAR</button></div> : <div className="flex gap-2"><input type="number" value={tempOpeningCash} onChange={e=>setTempOpeningCash(e.target.value)} className={`border w-20 rounded p-1 ${theme.input}`}/><button onClick={updateOpeningCash} className="bg-green-500 text-white px-2 rounded">OK</button></div>}</div>
-                                <div className="grid grid-cols-3 gap-2 text-center text-sm font-bold"><div className="bg-green-100 text-green-800 p-2 rounded">Dinheiro<br/>R$ {formatMoney(salesByMethod.money)}</div><div className="bg-teal-100 text-teal-800 p-2 rounded">PIX<br/>R$ {formatMoney(salesByMethod.pix)}</div><div className="bg-blue-100 text-blue-800 p-2 rounded">Cartão<br/>R$ {formatMoney(salesByMethod.card)}</div></div>
-                                <div className="bg-gray-800 text-white p-4 rounded-xl"><h3 className="text-gray-400 text-xs uppercase mb-2">Total Gaveta (Físico)</h3><div className="text-3xl font-bold text-green-400">R$ {formatMoney(finalCash)}</div></div>
-                                
-                                {/* ALTERNÂNCIA DE VISTAS DE RELATÓRIO */}
-                                <div className="flex rounded-lg overflow-hidden border border-gray-500/30">
-                                    <button onClick={() => setReportView('summary')} className={`flex-1 p-3 text-sm font-bold ${reportView === 'summary' ? 'bg-blue-600 text-white' : `${theme.card}`}`}>Resumo</button>
-                                    <button onClick={() => setReportView('history')} className={`flex-1 p-3 text-sm font-bold ${reportView === 'history' ? 'bg-blue-600 text-white' : `${theme.card}`}`}>Extrato</button>
-                                </div>
-
-                                {/* CONTEÚDO DO RELATÓRIO */}
-                                {reportView === 'summary' && showDetails && (
-                                    <div className="space-y-2 animate-fade-in"><DetailList title="Dinheiro" icon={Banknote} colorClass="text-green-600 bg-green-100" data={itemsByMethod.money} total={salesByMethod.money}/><DetailList title="PIX" icon={QrCode} colorClass="text-teal-600 bg-teal-100" data={itemsByMethod.pix} total={salesByMethod.pix}/><DetailList title="Cartão" icon={CreditCard} colorClass="text-blue-600 bg-blue-100" data={itemsByMethod.card} total={salesByMethod.card}/></div>
-                                )}
-
-                                {reportView === 'history' && (
-                                    <HistoryLog sales={salesHistory} />
-                                )}
-                                
-                                {reportView === 'summary' && !showDetails && (
-                                    <button onClick={()=>setShowDetails(true)} className={`w-full p-3 border border-dashed rounded ${theme.card} text-sm opacity-70`}>Toque para ver detalhes por item</button>
-                                )}
-
-                                <button onClick={resetSales} className="w-full mt-4 bg-red-100 text-red-600 p-3 rounded font-bold flex justify-center gap-2"><RefreshCcw/> FECHAR CAIXA</button>
-                            </div>
-                        )}
-
-                        {activeTab === 'menu' && userRole === 'gerente' && (
-                            <div className="p-4">
-                                <h2 className="font-bold text-xl mb-4">Configurar Produtos</h2>
-                                <div className={`${theme.card} p-4 rounded-xl mb-4`}><div className="grid gap-2"><input placeholder="Nome" value={newItem.name} onChange={e=>setNewItem({...newItem,name:e.target.value})} className={`border p-2 rounded ${theme.input}`}/><div className="flex gap-2"><input type="number" placeholder="Preço" value={newItem.price} onChange={e=>setNewItem({...newItem,price:e.target.value})} className={`border p-2 rounded w-full ${theme.input}`}/><button onClick={addMenuItem} className="bg-green-600 text-white px-4 rounded font-bold">+</button></div></div></div>
-                                <div className="space-y-2 mb-8">{menu.map(i => <div key={i.id} className={`flex justify-between p-3 rounded border ${theme.card}`}><div><div className="font-bold">{i.name}</div><div className="text-green-600">R$ {formatMoney(i.price)}</div></div><button onClick={()=>deleteMenuItem(i.id)} className="text-red-400"><Trash2/></button></div>)}</div>
-                                <h2 className="font-bold text-xl mb-4 text-red-500">Segurança</h2>
-                                <div className={`${theme.card} p-4 rounded-xl border border-red-200`}><h3 className="font-bold text-sm mb-2">Alterar Senha de Gerente</h3><div className="flex gap-2"><input type="text" placeholder="Nova Senha" value={newPassword} onChange={e=>setNewPassword(e.target.value)} className={`border p-2 rounded w-full ${theme.input}`}/><button onClick={handleChangePassword} className="bg-red-500 text-white px-4 rounded font-bold">Salvar</button></div></div>
-                            </div>
-                        )}
-
-                        {(activeTab === 'report' || activeTab === 'menu') && userRole !== 'gerente' && <div className="p-10 text-center opacity-50 flex flex-col items-center justify-center h-full"><Lock className="mb-2" size={40}/><p>Acesso Restrito ao Gerente</p></div>}
-                    </main>
-
-                    <nav className={`${theme.nav} flex justify-around p-2 fixed bottom-0 w-full z-30 pb-safe shadow-lg transition-colors`}>
-                        {userRole !== 'cozinha' && <button onClick={() => setActiveTab('pos')} className={`flex flex-col items-center p-2 rounded-lg flex-1 ${activeTab === 'pos' ? 'text-red-500' : 'text-gray-400'}`}><Coffee size={24}/><span className="text-[10px] font-bold mt-1">VENDER</span></button>}
-                        <button onClick={() => setActiveTab('orders')} className={`flex flex-col items-center p-2 rounded-lg flex-1 ${activeTab === 'orders' ? 'text-blue-500' : 'text-gray-400'}`}><div className="relative"><ClipboardList size={24}/>{openOrders.length>0 && <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse border-2 border-white"></span>}</div><span className="text-[10px] font-bold mt-1">{userRole === 'cozinha' ? 'PRODUÇÃO' : 'COMANDAS'}</span></button>
-                        {userRole === 'gerente' && <button onClick={() => setActiveTab('report')} className={`flex flex-col items-center p-2 rounded-lg flex-1 ${activeTab === 'report' ? 'text-green-500' : 'text-gray-400'}`}><Wallet size={24}/><span className="text-[10px] font-bold mt-1">CAIXA</span></button>}
-                        {userRole === 'gerente' && <button onClick={() => setActiveTab('menu')} className={`flex flex-col items-center p-2 rounded-lg flex-1 ${activeTab === 'menu' ? theme.text : 'text-gray-400'}`}><Settings size={24}/><span className="text-[10px] font-bold mt-1">CONFIG</span></button>}
-                    </nav>
-                </div>
-            );
-        }
-
-        const root = createRoot(document.getElementById('root'));
-        const ErrorWrappedApp = () => <ErrorBoundary><App /></ErrorBoundary>;
-        root.render(<ErrorWrappedApp />);
-    </script>
-</body>
-</html>
+            const itemsByMethod = (() => { const d={money:{},pix:{},card:{}}; salesHistory.forEach(s=>{ const m=s.method||'money'; if(s.items) s.items.forEach(i=>{ if(!d[m][i.name])d[m][i.name]={
